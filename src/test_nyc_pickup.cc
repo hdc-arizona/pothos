@@ -2,7 +2,7 @@
 
 #include <boost/chrono.hpp>
 
-#include "persistentsatcube.h"
+// #include "persistentsatcube.h"
 #include "sparsesatcube.h"
 #include "nanocube.h"
 #include "garbagecube.h"
@@ -45,17 +45,17 @@ void benchmark(const std::vector<std::vector<size_t> > &entries)
   
 }
 
-template <typename Summary>
-struct PersistentSATGarbageCube: public PersistentSATCube<Summary, GarbageCube> {
-  explicit PersistentSATGarbageCube(const std::vector<size_t> &widths):
-      PersistentSATCube<Summary, GarbageCube>(widths) {}
-};
+// template <typename Summary>
+// struct PersistentSATGarbageCube: public PersistentSATCube<Summary, GarbageCube> {
+//   explicit PersistentSATGarbageCube(const std::vector<size_t> &widths):
+//       PersistentSATCube<Summary, GarbageCube>(widths) {}
+// };
 
-template <typename Summary>
-struct PersistentSATNanoCube: public PersistentSATCube<Summary, NanoCube> {
-  explicit PersistentSATNanoCube(const std::vector<size_t> &widths):
-      PersistentSATCube<Summary, NanoCube>(widths) {}
-};
+// template <typename Summary>
+// struct PersistentSATNanoCube: public PersistentSATCube<Summary, NanoCube> {
+//   explicit PersistentSATNanoCube(const std::vector<size_t> &widths):
+//       PersistentSATCube<Summary, NanoCube>(widths) {}
+// };
 
 template <typename Summary>
 struct SparseSATGarbageCube: public SparseSATCube<Summary, GarbageCube> {

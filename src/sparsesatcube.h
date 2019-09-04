@@ -1,7 +1,7 @@
 #ifndef SPARSESATCUBE_H_
 #define SPARSESATCUBE_H_
 
-#include <immutable/array.h>
+// #include <immutable/array.h>
 #include <utility>
 #include <iostream>
 #include <boost/assert.hpp>
