@@ -15,23 +15,24 @@ namespace nc2 {
 
 bool test_nanocube_1()
 {
-  std::vector<size_t> widths { 4, 4, 4, 4 };
+  int n_dims = 4;
+  int dim_widths = 4;
+  int n_points = 5;
+  int n_tests = 1000;
+  
+  std::vector<size_t> widths;
+  for (int i = 0; i < n_dims; ++i) {
+    widths.push_back(dim_widths);
+  }
 
-  for (size_t k=0; k<1000; ++k) {
+  for (size_t k = 0; k < n_tests; ++k) {
     std::vector<std::pair<std::vector<size_t>, int> > values;
-    for (size_t i=0; i<5; ++i) {
+    for (size_t i = 0; i < n_points; ++i) {
       std::vector<size_t> p;
-      for (size_t j=0; j<10; ++j)
+      for (size_t j = 0; j < n_dims; ++j)
         p.push_back(rand() % 8);
       values.push_back(std::make_pair(p, 1));
     }
-    // {
-    //   std::make_pair(std::vector<size_t>({0, 0}), 1),
-    //   std::make_pair(std::vector<size_t>({7, 7}), 1),
-    //   std::make_pair(std::vector<size_t>({1, 6}), 1),
-    //   std::make_pair(std::vector<size_t>({0, 3}), 1),
-    //   std::make_pair(std::vector<size_t>({0, 6}), 1)
-    // };
     NanoCube<int>  nanocube (widths, values);
     NaiveCube<int> naivecube(widths, values);
     if (!test_randomized_query_equivalence(nanocube, naivecube, 1000)) {
@@ -62,8 +63,8 @@ bool test_naivecube_and_nanocube_equivalence_4()
     std::make_pair(std::vector<size_t>({4, 0, 1}), 1),
     std::make_pair(std::vector<size_t>({3, 0, 3}), 1),
     std::make_pair(std::vector<size_t>({4, 3, 1}), 1),
-    // std::make_pair(std::vector<size_t>({0, 2, 6}), 1),
-    // std::make_pair(std::vector<size_t>({1, 7, 6}), 1)
+    std::make_pair(std::vector<size_t>({0, 2, 6}), 1),
+    std::make_pair(std::vector<size_t>({1, 7, 6}), 1)
   };
 
   NanoCube<int>nanocube (widths, values);
@@ -205,8 +206,7 @@ bool test_naivecube_and_nanocube_equivalence_2()
   NanoCube<int> nanocube(widths);
   std::vector<size_t> points;
   std::vector<std::vector<size_t> > addresses {
-    {7, 1}, {9, 10}, {2, 8}//, {8, 14}, {3, 13}, {8, 5}, {12, 2}, {3, 7}, {7, 1}, {8, 4}
-    // {7, 1}, {9, 10}, {2, 8}, {8, 14}, {3, 13}, {8, 5}, {12, 2}, {3, 7}, {7, 1}, {8, 4}
+    {7, 1}, {9, 10}, {2, 8}, {8, 14}, {3, 13}, {8, 5}, {12, 2}, {3, 7}, {7, 1}, {8, 4}
   };
   for (auto &e: addresses) {
     points.push_back(e[0]);

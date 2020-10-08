@@ -53,6 +53,9 @@ Summary NaiveCube<Summary>::range_query(
 
   for (auto &v: values_) {
     bool inside = true;
+    if (!(v.first.size() == bounds.size())) {
+      std::cerr << v.first.size() << " " << bounds.size() << std::endl;
+    }
     BOOST_ASSERT(v.first.size() == bounds.size());
     for (int i=0; i<bounds.size(); ++i) {
       size_t range_b = bounds[i].first,
