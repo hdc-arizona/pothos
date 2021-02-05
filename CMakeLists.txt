@@ -12,6 +12,14 @@ if(Boost_FOUND)
   include_directories(${Boost_INCLUDE_DIRS})
 endif()
 
+
+# include(cmake/FindArrow.cmake) findarrow doesn't work, so we'll do it by hand
+
+set (ARROW_INCLUDE_DIR /Users/cscheid/repos/github/apache/arrow/cpp/src)
+set (ARROW_LIBRARY_DIR /Users/cscheid/repos/github/apache/arrow/cpp/release/release)
+
+# let me say this will all my heart: fuck cmake
+
 ################################################################################
 
 add_executable(test_sparsesat
@@ -57,3 +65,14 @@ target_include_directories(test_nyc_pickup PUBLIC
 
 target_link_libraries(test_nyc_pickup ${Boost_LIBRARIES})
 
+################################################################################
+
+add_executable(test_arrow
+  src/test_arrow.cc
+  )
+
+target_include_directories(test_arrow PUBLIC ${ARROW_INCLUDE_DIR})
+
+target_link_directories(test_arrow PUBLIC ${ARROW_LIBRARY_DIR})
+
+target_link_libraries(test_arrow PUBLIC arrow)

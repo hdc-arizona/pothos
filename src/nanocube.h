@@ -18,9 +18,9 @@ namespace nc2 {
 
 struct RefTrackedNCDimNode
 {
+  // refs_ stores a vector of backward references (nodes in the previous dimension which reference this node)
   std::vector<NCNodePointerType> refs_;
   NCNodePointerType l_, r_, n_;
-  // left_, right_, next_;
   
   RefTrackedNCDimNode():
       refs_(), l_(-1), r_(-1), n_(-1) {}

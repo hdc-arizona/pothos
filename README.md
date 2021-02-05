@@ -16,6 +16,7 @@ This project uses CMake and a number of open-source libraries:
 ## Assumed to be available in the environment
 
 * Boost
+* Apache Arrow
 
 # Compiling
 
@@ -23,8 +24,7 @@ Compiling the code should just be a matter of running cmake:
 
     $ md build
 	$ cd build
-	$ ccmake ..
-	
+	$ cmake ..
 	$ make -j16
 	
 
