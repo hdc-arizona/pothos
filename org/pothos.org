@@ -1,0 +1,11 @@
+# -*- mode: org; -*-
+#+STARTUP: showall logdone hidestars
+#+ARCHIVE: %s_done::
+
+* General notes
+
+Internally, each dimension always has dimensions of powers of two;
+these are stored in the "widths" fields as the exponent. Eg, widths_
+= {4, 4} indicates a 2-dimensional data structure with 16 addresses
+per dimension.
+

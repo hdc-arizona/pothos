@@ -73,7 +73,6 @@ bool test_equivalence_to_naivecube(
     const std::vector<std::vector<size_t> > &points,
     const std::vector<std::pair<size_t, size_t> > &range)
 {
-  size_t width = widths.size();
   nc2::NaiveCube<int> naivecube(widths);
   Cube<int> cube(widths);
   for (auto const &e: points) {

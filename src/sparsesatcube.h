@@ -66,8 +66,8 @@ struct SparseSATSummaryPolicyAdaptor
       const SparseSATCube<Summary, Cube> &sat_cube,
       std::pair<size_t, size_t> last_bound,
       SummaryPolicy &summary_policy)
-      : sat_cube_(sat_cube)
-      , last_bound_(last_bound)
+      : last_bound_(last_bound)
+      , sat_cube_(sat_cube)
       , summary_policy_(summary_policy) {}
 
   void add(const SparseSAT<Summary> &v) {

@@ -168,7 +168,8 @@ struct BaseCube
     // safely share the next edge with the result.
     if (l1 == l2 && r1 == r2 && l1 == -1 && r1 == -1) {
       NCNodePointerType new_next = merge(dim+1, n1, n2);
-      const NCDimNode &new_next_node = this->dims_[dim].nodes[new_next];
+      // const NCDimNode &new_next_node = this->dims_[dim].nodes[new_next];
+      // 2020-02-09 - removed. unused var?
       return this->add_node(dim, -1, -1, new_next);
     }
     if (l1 == l2 && l1 == -1) {

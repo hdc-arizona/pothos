@@ -16,6 +16,7 @@
 
 #include "attribute_mapper.h"
 #include "arrow_utils.h"
+#include "arrowcube.h"
 
 using namespace std;
 
@@ -52,7 +53,6 @@ shared_ptr<arrow::Table> read_table(const std::string& path)
 
   return arrow;
 }
-
 
 pair<double, double>
 col_bounds(const std::string &colname,
@@ -181,10 +181,8 @@ convert_to_fixed(shared_ptr<arrow::Table> input,
       arrays);
 }
 
-void test_with_nyc_pickup_data(std::string filename)
+shared_ptr<arrow::Table> make_address_table(shared_ptr<arrow::Table> arrow)
 {
-  shared_ptr<arrow::Table> arrow = read_table(filename);
-
   cerr << "Bounds:" << endl;
   cerr << "  pickup_latitude: " << col_bounds("pickup_latitude", arrow) << endl;
   cerr << "  pickup_longitude: " << col_bounds("pickup_longitude", arrow) << endl;
@@ -209,6 +207,38 @@ void test_with_nyc_pickup_data(std::string filename)
           arrow,
           { "pickup_latitude", "pickup_longitude" },
           xforms);
+  
+  return addresses;
+}
+
+void test_with_nyc_pickup_data(std::string filename)
+{
+  shared_ptr<arrow::Table> arrow = read_table(filename);
+
+  // cerr << "Bounds:" << endl;
+  // cerr << "  pickup_latitude: " << col_bounds("pickup_latitude", arrow) << endl;
+  // cerr << "  pickup_longitude: " << col_bounds("pickup_longitude", arrow) << endl;
+  // cerr << "  dropoff_latitude: " << col_bounds("dropoff_latitude", arrow) << endl;
+  // cerr << "  dropoff_longitude: " << col_bounds("dropoff_longitude", arrow) << endl;
+  // cerr << "mean/stdev:" << endl;
+  // cerr << "  pickup_latitude: " << col_mean_stdev("pickup_latitude", arrow) << endl;
+  // cerr << "  pickup_longitude: " << col_mean_stdev("pickup_longitude", arrow) << endl;
+  // cerr << "  dropoff_latitude: " << col_mean_stdev("dropoff_latitude", arrow) << endl;
+  // cerr << "  dropoff_longitude: " << col_mean_stdev("dropoff_longitude", arrow) << endl;
+
+  const size_t resolution = 256;
+  
+  // // DoubleAttribute lat( 40.5,  41, resolution);
+  // // DoubleAttribute lon(-74.25, -73.75, resolution);
+  // CenterWidthAttribute lat(40.75, 0.25, resolution);
+  // CenterWidthAttribute lon(-74, 0.25, resolution);
+
+  // vector<CenterWidthAttribute*> xforms = {&lat, &lon};
+  shared_ptr<arrow::Table> addresses = make_address_table(arrow);
+      // convert_to_fixed<CenterWidthAttribute>(
+      //     arrow,
+      //     { "pickup_latitude", "pickup_longitude" },
+      //     xforms);
 
   // cerr << "Hello ?" << endl;
   // arrow_foreach<arrow::Int32Type>(
@@ -223,7 +253,7 @@ void test_with_nyc_pickup_data(std::string filename)
   arrow_foreach<arrow::Int32Type>(
       addresses->GetColumnByName("pickup_latitude"),
       addresses->GetColumnByName("pickup_longitude"),
-      [&n, &counts_2d, &lat, &lon](uint32_t i_lat, uint32_t i_lon) {
+      [&n, &counts_2d](uint32_t i_lat, uint32_t i_lon) {
         ++n;
         i_lat = resolution - 1 - i_lat;
         counts_2d[i_lon + resolution * i_lat]++;
@@ -240,12 +270,33 @@ void test_with_nyc_pickup_data(std::string filename)
             });
 }
 
+struct CountPolicy
+{
+  int count;
+  CountPolicy(): count(0) {};
+  
+  inline void add(const RowIterator &row) {
+    ++count;
+  }
+};
+
+void test_arrow_cube(std::string filename)
+{
+  shared_ptr<arrow::Table>
+      arrow = read_table(filename),
+      addresses = make_address_table(arrow);
+      
+  nc2::ArrowCube ac(addresses, { "pickup_latitude", "pickup_longitude" });
+
+  CountPolicy policy;
+  ac.range_query<size_t, CountPolicy>(policy, { make_pair(size_t(0), size_t(256)), make_pair(size_t(0), size_t(256)) });
+
+  cerr << policy.count << endl;
+}
+
 int main(int argc, char **argv)
 {
-  if (argc < 2) {
-    cerr << "Expected filename" << endl;
-    exit(1);
-  }
-
-  test_with_nyc_pickup_data(argv[1]);
+  const std::string filename = "/Users/cscheid/data/nyc-tlc/feather/yellow_tripdata_2014-02.feather";
+  // test_with_nyc_pickup_data(argv[1]);
+  test_arrow_cube(filename);
 }

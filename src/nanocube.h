@@ -146,7 +146,6 @@ struct NanoCube
            const std::vector<std::pair<std::vector<size_t>, Summary> > &values):
       NanoCube(widths)
   {
-    int i=0;
     for (auto &value: values) {
       insert(value.first, value.second);
       // std::ostringstream fn;
@@ -261,7 +260,8 @@ struct NanoCube
     // safely share the next edge with the result.
     if (l1 == l2 && r1 == r2 && l1 == -1 && r1 == -1) {
       NCNodePointerType new_next = merge(dim+1, n1, n2);
-      const RefTrackedNCDimNode &new_next_node = this->dims_[dim].nodes_[new_next];
+      // const RefTrackedNCDimNode &new_next_node = this->dims_[dim].nodes_[new_next];
+      // 2020-02-09 unused var?
       return this->add_node(dim, -1, -1, new_next);
     }
     if (l1 == l2 && l1 == -1) {
@@ -441,7 +441,8 @@ struct NanoCube
         TRACE(stream_vector(p.second));
         TRACE(stream_vector(dims_[dim].nodes_[ref].refs_));
         NCNodePointerType spine_node = get_spine(summary, addresses, dim, bit+1);
-        NCNodePointerType spine_next = dims_[dim].nodes_[spine_node].n_;
+        // NCNodePointerType spine_next = dims_[dim].nodes_[spine_node].n_;
+        // 2020-02-09 - removed, unused var?
         NCNodePointerType merged_ref = merge(dim, ref, spine_node);
 
         for (auto &node_to_update: p.second) {

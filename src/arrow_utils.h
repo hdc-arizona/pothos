@@ -88,7 +88,8 @@ struct ChunkedArrayIterator
       array(array),
       n_chunks(array->chunks().size()),
       chunk_ix(0),
-      chunk_offset(0)
+      chunk_offset(0),
+      array_offset(0)
   {
     if (n_chunks != 0) {
       chunk = array->chunks()[0];
@@ -110,25 +111,29 @@ struct ChunkedArrayIterator
   template <typename TraitType>
   typename arrow::TypeTraits<TraitType>::CType value() const
   {
-    typedef typename arrow::TypeTraits<TraitType>::ArrayType A;
-    A typed_chunk = std::static_pointer_cast<A>(chunk);
+    auto typed_chunk = std::static_pointer_cast<typename arrow::TypeTraits<TraitType>::ArrayType>(chunk);
     return typed_chunk->Value(chunk_offset);
   }
 
   void advance_chunk() {
     chunk_ix += 1;
     chunk_offset = 0;
-    chunk = array->chunks()[chunk_ix];
+    if (chunk_ix == n_chunks) {
+      chunk = nullptr;
+      std::cerr << "End of chunked array!" << std::endl;
+    } else {
+      chunk = array->chunks()[chunk_ix];
+    }
   }
   
   bool next(bool skip_null = true) {
     do {
       ++chunk_offset;
       ++array_offset;
-      while (chunk_offset >= chunk->length() && chunk_ix < n_chunks) {
+      while (chunk_ix < n_chunks && chunk_offset >= chunk->length()) {
         advance_chunk();
       }
-    } while (skip_null && (!done()) && is_null());
+    } while (skip_null && !done() && is_null());
     
     return done();
   }
@@ -142,8 +147,8 @@ struct ChunkedArrayIterator
     (if array_offset == array->size(), the chunkedarray has ended)
   */
   size_t advance_until(size_t min_array_offset, bool skip_null = true) {
-    if (min_array_offset < array_offset) {
-      return is_null();
+    if (done() || min_array_offset < array_offset) {
+      return array_offset;
     }
     // array_advance indicates the total advance left
     size_t array_advance = min_array_offset - array_offset;
@@ -152,6 +157,9 @@ struct ChunkedArrayIterator
       array_advance -= l - chunk_offset;
       array_offset += l - chunk_offset;
       advance_chunk();
+      if (done()) {
+        return array_offset;
+      }
       l = chunk->length();
     }
     // here, chunk_offset + array_advance < l
@@ -163,7 +171,7 @@ struct ChunkedArrayIterator
     // now we're done, unless we were asked to skip nulls, in which case
     // we advance one by one until
 
-    if (skip_null && is_null()) {
+    if (skip_null && !done() && is_null()) {
       next(true);
     }
     return array_offset;
