@@ -120,7 +120,6 @@ struct ChunkedArrayIterator
     chunk_offset = 0;
     if (chunk_ix == n_chunks) {
       chunk = nullptr;
-      std::cerr << "End of chunked array!" << std::endl;
     } else {
       chunk = array->chunks()[chunk_ix];
     }
