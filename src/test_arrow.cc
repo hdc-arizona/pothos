@@ -5,6 +5,8 @@
 #include <arrow/table.h>
 #include <arrow/array.h>
 #include <arrow/builder.h>
+#include <arrow/compute/api_vector.h>
+// #include <arrow/compute/exec.h>
 
 #include <boost/assert.hpp>
 
@@ -286,12 +288,18 @@ void test_arrow_cube(std::string filename)
       arrow = read_table(filename),
       addresses = make_address_table(arrow);
       
-  nc2::ArrowCube ac(addresses, { "pickup_latitude", "pickup_longitude" });
+  // nc2::ArrowCube ac(addresses, { "pickup_latitude", "pickup_longitude" });
+  // CountPolicy policy;
+  // ac.range_query<size_t, CountPolicy>(policy, { make_pair(size_t(0), size_t(256)), make_pair(size_t(0), size_t(256)) });
+  // cerr << policy.count << endl;
 
-  CountPolicy policy;
-  ac.range_query<size_t, CountPolicy>(policy, { make_pair(size_t(0), size_t(256)), make_pair(size_t(0), size_t(256)) });
+  // arrow::compute::SortOrder order = arrow::compute::SortOrder::Ascending;
+  arrow::compute::SortOptions options({
+      arrow::compute::SortKey("pickup_latitude", arrow::compute::SortOrder::Ascending)
+    });
+  auto result = arrow::compute::CallFunction("sort_indices", { arrow::Datum(addresses) }, &options)
+      .ValueOrDie().make_array();
 
-  cerr << policy.count << endl;
 }
 
 int main(int argc, char **argv)
