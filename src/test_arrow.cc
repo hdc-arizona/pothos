@@ -21,8 +21,9 @@
 #include "arrowcube.h"
 
 using namespace std;
+using namespace arrow;
 
-void describe_table(shared_ptr<arrow::Table> arrow)
+void describe_table(shared_ptr<Table> arrow)
 {
   auto schema = arrow->schema();
 
@@ -34,16 +35,16 @@ void describe_table(shared_ptr<arrow::Table> arrow)
   }
 }
 
-shared_ptr<arrow::Table> read_table(const std::string& path)
+shared_ptr<Table> read_table(const std::string& path)
 {
-  arrow::Status st;
+  Status st;
 
-  auto file = arrow::io::ReadableFile::Open(path).ValueOrDie();
+  auto file = io::ReadableFile::Open(path).ValueOrDie();
 
-  std::shared_ptr<arrow::ipc::feather::Reader> feather_reader =
-      arrow::ipc::feather::Reader::Open(file).ValueOrDie();
+  std::shared_ptr<ipc::feather::Reader> feather_reader =
+      ipc::feather::Reader::Open(file).ValueOrDie();
 
-  shared_ptr<arrow::Table> arrow;
+  shared_ptr<Table> arrow;
 
   st = feather_reader->Read(&arrow);
   if (!st.ok()) {
@@ -58,14 +59,14 @@ shared_ptr<arrow::Table> read_table(const std::string& path)
 
 pair<double, double>
 col_bounds(const std::string &colname,
-           shared_ptr<arrow::Table> arrow)
+           shared_ptr<Table> arrow)
 {
-  shared_ptr<arrow::ChunkedArray> col = arrow->GetColumnByName(colname);
+  shared_ptr<ChunkedArray> col = arrow->GetColumnByName(colname);
 
   double min_so_far = numeric_limits<double>::max(),
       max_so_far = numeric_limits<double>::min();
 
-  arrow_foreach<arrow::DoubleType>(
+  arrow_foreach<DoubleType>(
       col,
       [&min_so_far,
        &max_so_far](double v) {
@@ -79,14 +80,14 @@ col_bounds(const std::string &colname,
 pair<double, double>
 col_mean_stdev(
     const std::string &colname,
-    shared_ptr<arrow::Table> arrow)
+    shared_ptr<Table> arrow)
 {
-  shared_ptr<arrow::ChunkedArray> col = arrow->GetColumnByName(colname);
+  shared_ptr<ChunkedArray> col = arrow->GetColumnByName(colname);
 
   size_t n = 0;
   double ex = 0.0, exx = 0.0;
 
-  arrow_foreach<arrow::DoubleType>(
+  arrow_foreach<DoubleType>(
       col,
       [&n, &ex, &exx](double v) {
         // drop nans
@@ -143,47 +144,47 @@ std::tuple<int, int, int> color(float u)
 
 template <typename T>
 // This should be done more carefully for large data.
-shared_ptr<arrow::Table>
-convert_to_fixed(shared_ptr<arrow::Table> input,
+shared_ptr<Table>
+convert_to_fixed(shared_ptr<Table> input,
                  vector<string> columns,
                  vector<T*> xforms
                  )
 {
-  vector<shared_ptr<arrow::Field> > fields;
-  vector<shared_ptr<arrow::ChunkedArray> > arrays;
+  vector<shared_ptr<Field> > fields;
+  vector<shared_ptr<ChunkedArray> > arrays;
   
   for (size_t i = 0; i < columns.size(); ++i) {
     string &c = columns[i];
-    fields.push_back(arrow::field(c, shared_ptr<arrow::DataType>(new arrow::UInt32Type), false));
-    // shared_ptr<arrow::Array> array;
-    shared_ptr<arrow::ChunkedArray> col = input->GetColumnByName(c);
+    fields.push_back(field(c, shared_ptr<DataType>(new UInt32Type), false));
+    // shared_ptr<Array> array;
+    shared_ptr<ChunkedArray> col = input->GetColumnByName(c);
 
-    vector<shared_ptr<arrow::Array>> array_vector;
+    vector<shared_ptr<Array>> array_vector;
     auto chunks = col->chunks();
     for (auto &chunk: chunks) {
-      arrow::NumericBuilder<arrow::UInt32Type> builder;
-      auto float_chunk = std::static_pointer_cast<arrow::DoubleArray>(chunk);
+      NumericBuilder<UInt32Type> builder;
+      auto float_chunk = std::static_pointer_cast<DoubleArray>(chunk);
       for (size_t j = 0; j < float_chunk->length(); ++j) {
         int32_t v = xforms[i]->convert(float_chunk->Value(j));
         OK_OR_DIE(builder.Append(v));
       }
-      shared_ptr<arrow::Array> a;
+      shared_ptr<Array> a;
       OK_OR_DIE(builder.Finish(&a));
       array_vector.push_back(a);
     }
     cerr << array_vector.size() << endl;
     cerr << col->chunks().size() << endl;
-    shared_ptr<arrow::ChunkedArray> ca(new arrow::ChunkedArray(array_vector));
+    shared_ptr<ChunkedArray> ca(new ChunkedArray(array_vector));
     arrays.push_back(ca);
     cerr << ca->length() << endl;
   }
 
-  return arrow::Table::Make(
-      arrow::schema(fields),
+  return Table::Make(
+      schema(fields),
       arrays);
 }
 
-shared_ptr<arrow::Table> make_address_table(shared_ptr<arrow::Table> arrow)
+shared_ptr<Table> make_address_table(shared_ptr<Table> arrow)
 {
   cerr << "Bounds:" << endl;
   cerr << "  pickup_latitude: " << col_bounds("pickup_latitude", arrow) << endl;
@@ -204,7 +205,7 @@ shared_ptr<arrow::Table> make_address_table(shared_ptr<arrow::Table> arrow)
   CenterWidthAttribute lon(-74, 0.25, resolution);
 
   vector<CenterWidthAttribute*> xforms = {&lat, &lon};
-  shared_ptr<arrow::Table> addresses =
+  shared_ptr<Table> addresses =
       convert_to_fixed<CenterWidthAttribute>(
           arrow,
           { "pickup_latitude", "pickup_longitude" },
@@ -215,7 +216,7 @@ shared_ptr<arrow::Table> make_address_table(shared_ptr<arrow::Table> arrow)
 
 void test_with_nyc_pickup_data(std::string filename)
 {
-  shared_ptr<arrow::Table> arrow = read_table(filename);
+  shared_ptr<Table> arrow = read_table(filename);
 
   // cerr << "Bounds:" << endl;
   // cerr << "  pickup_latitude: " << col_bounds("pickup_latitude", arrow) << endl;
@@ -236,14 +237,14 @@ void test_with_nyc_pickup_data(std::string filename)
   // CenterWidthAttribute lon(-74, 0.25, resolution);
 
   // vector<CenterWidthAttribute*> xforms = {&lat, &lon};
-  shared_ptr<arrow::Table> addresses = make_address_table(arrow);
+  shared_ptr<Table> addresses = make_address_table(arrow);
       // convert_to_fixed<CenterWidthAttribute>(
       //     arrow,
       //     { "pickup_latitude", "pickup_longitude" },
       //     xforms);
 
   // cerr << "Hello ?" << endl;
-  // arrow_foreach<arrow::Int32Type>(
+  // arrow_foreach<Int32Type>(
   //     addresses->GetColumnByName("pickup_longitude"),
   //     [](uint32_t v) {
   //       cerr << v << endl;
@@ -252,7 +253,7 @@ void test_with_nyc_pickup_data(std::string filename)
   
   vector<size_t> counts_2d(resolution * resolution);
   size_t n = 0;
-  arrow_foreach<arrow::Int32Type>(
+  arrow_foreach<Int32Type>(
       addresses->GetColumnByName("pickup_latitude"),
       addresses->GetColumnByName("pickup_longitude"),
       [&n, &counts_2d](uint32_t i_lat, uint32_t i_lon) {
@@ -282,9 +283,93 @@ struct CountPolicy
   }
 };
 
+/******************************************************************************/
+
+/// use this to access multiple values from a chunkedarray
+struct ChunkedArrayAccessor
+{
+  std::vector<uint64_t> offset_bases;
+  const ChunkedArray &chunked_array;
+  size_t ix;
+
+  // this assumes the the value `offset` implies a valid lookup into
+  // the array
+  
+  // FIXME: figure out how to deal with null values
+  template <typename Type>
+  typename TypeTraits<Type>::CType value(size_t offset) {
+    
+    // if previously computed offset is valid, don't binary-search again.
+    // hopefully this stays in L1 cache..
+    if (!(offset_bases[ix] <= offset && offset_bases[ix+1] > offset)) {
+      auto f = upper_bound(offset_bases.begin(), offset_bases.end(), offset) - 1;
+      ix = f - offset_bases.begin();
+    }
+
+    // we might want to cache these as well. TODO: benchmark
+    size_t diff = offset - offset_bases[ix];
+    auto array_cast = std::static_pointer_cast<typename TypeTraits<Type>::ArrayType>(chunked_array.chunks()[ix]);
+    return array_cast->Value(diff);
+  }
+
+  explicit ChunkedArrayAccessor(const ChunkedArray &chunked_array)
+      : offset_bases()
+      , chunked_array(chunked_array)
+  {
+    size_t sum_so_far = 0;
+    for (size_t i = 0; i < chunked_array.chunks().size(); ++i) {
+      offset_bases.push_back(sum_so_far);
+      sum_so_far += chunked_array.chunks()[i]->length();
+    }
+    offset_bases.push_back(sum_so_far);
+    ix = 0;
+  }
+};
+
+/******************************************************************************/
+// reindex an unsorted chunked array given the result of sort_indices
+// returns chunked array with the same chunking structure as the passed array.
+
+template <typename ArrowType>
+shared_ptr<ChunkedArray>
+permute_chunked_array(
+    const ChunkedArray &chunked_array,
+    shared_ptr<Array> indices)
+{
+  // TODO: figure out how to do this type-generically.
+  //
+  // TODO: figure out how to handle nulls;
+  // 
+  // vector_sort.cc creates a vector of type with run-time-constructed types.
+  // that's what we should base our impl off of.
+  //
+  // But I don't know how to make Builders work in this manner
+  auto indices_cast = std::static_pointer_cast<UInt64Array>(indices);
+  NumericBuilder<ArrowType> builder;
+
+  ChunkedArrayAccessor accessor(chunked_array);
+
+  std::vector<shared_ptr<Array>> vecs;
+
+  size_t offset = 0;
+  for (size_t i = 0; i < chunked_array.chunks().size(); ++i) {
+    size_t chunk_size = chunked_array.chunks()[i]->length();
+    for (size_t j = 0; j < chunk_size; ++j) {
+      uint64_t ix = indices_cast->Value(offset++);
+      uint32_t v = accessor.value<ArrowType>(ix);
+      builder.Append(v);
+    }
+    vecs.push_back(builder.Finish().ValueOrDie());
+  }
+
+  return shared_ptr<ChunkedArray>(new ChunkedArray(vecs));
+}
+
+/******************************************************************************/
+
 void test_arrow_cube(std::string filename)
 {
-  shared_ptr<arrow::Table>
+  shared_ptr<Table>
       arrow = read_table(filename),
       addresses = make_address_table(arrow);
       
@@ -293,13 +378,26 @@ void test_arrow_cube(std::string filename)
   // ac.range_query<size_t, CountPolicy>(policy, { make_pair(size_t(0), size_t(256)), make_pair(size_t(0), size_t(256)) });
   // cerr << policy.count << endl;
 
-  // arrow::compute::SortOrder order = arrow::compute::SortOrder::Ascending;
-  arrow::compute::SortOptions options({
-      arrow::compute::SortKey("pickup_latitude", arrow::compute::SortOrder::Ascending)
+  // compute::SortOrder order = compute::SortOrder::Ascending;
+  compute::SortOptions options({
+      compute::SortKey("pickup_latitude", compute::SortOrder::Ascending)
     });
-  auto result = arrow::compute::CallFunction("sort_indices", { arrow::Datum(addresses) }, &options)
+  auto sort_permutation = compute::CallFunction("sort_indices", { Datum(addresses) }, &options)
       .ValueOrDie().make_array();
 
+  vector<shared_ptr<Field> > fields;
+  vector<shared_ptr<ChunkedArray> > sorted_columns;
+  vector<string> names { "pickup_latitude", "pickup_longitude" };
+
+  for (auto &name: names) {
+    sorted_columns.push_back(
+        permute_chunked_array<UInt32Type>(
+            *addresses->GetColumnByName(name),
+            sort_permutation));
+    fields.push_back(field(name, shared_ptr<DataType>(new UInt32Type), false));
+  }
+  
+  auto sorted_df = Table::Make(schema(fields), sorted_columns);
 }
 
 int main(int argc, char **argv)
