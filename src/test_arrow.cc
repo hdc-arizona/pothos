@@ -6,7 +6,6 @@
 #include <arrow/array.h>
 #include <arrow/builder.h>
 #include <arrow/compute/api_vector.h>
-// #include <arrow/compute/exec.h>
 
 #include <boost/assert.hpp>
 
@@ -18,7 +17,10 @@
 
 #include "attribute_mapper.h"
 #include "arrow_utils.h"
+#include "arrow_convenience.h"
 #include "arrowcube.h"
+
+/******************************************************************************/
 
 using namespace std;
 using namespace arrow;

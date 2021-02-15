@@ -3,16 +3,11 @@
 #include <arrow/array.h>
 #include <arrow/table.h>
 #include <memory>
+#include <unordered_map>
+
+#include "arrow_macros.h"
 
 /******************************************************************************/
-
-#define OK_OR_DIE(exp)                                          \
-do {                                                            \
-  if (!(exp).ok()) {                                            \
-    cerr << "DIE AT " << __FILE__ << ":" << __LINE__ << endl;   \
-    exit(1);                                                    \
-  }                                                             \
-} while (0);
 
 template <typename TraitType, typename T>
 void arrow_foreach(
@@ -31,6 +26,7 @@ void arrow_foreach(
 
 // this is lower overhead than the exec.h infra in arrow, but it's also
 // clearly much less general. This assumes always same types and no nulls
+// it's also not clear whether this is _faster_...
 template <typename TraitType, typename T>
 void arrow_foreach(
     std::shared_ptr<arrow::ChunkedArray> column_1,
@@ -282,6 +278,85 @@ struct RowIterator
 };
 
 /******************************************************************************/
+//
+// assumes aggregation column is a double and addition is what we want.
+//
+// assumes address columns are all UInt32Type
+//
+// assumes arrays are non-empty, consistently chunked, and of the same size.
+// 
+// doesn't chunk arrays
+//
+std::shared_ptr<arrow::Table>
+compress_aggregation(
+    std::shared_ptr<arrow::Table> input,
+    const std::vector<std::string> &address_columns,
+    const std::string &aggregation_column)
+{
+  std::vector<ChunkedArrayIterator> itors;
+  for (auto &name: address_columns) {
+    itors.push_back(ChunkedArrayIterator(input->GetColumnByName(name)));
+  }
+  std::vector<arrow::NumericBuilder<arrow::UInt32Type>> compressed_address_builders(itors.size());
+  
+  itors.push_back(ChunkedArrayIterator(input->GetColumnByName(aggregation_column)));
+  arrow::NumericBuilder<arrow::DoubleType> compressed_aggregation_builder;
+
+  RowIterator row_itor(itors);
+  double aggregation_so_far = 0;
+  std::vector<uint32_t> addresses(address_columns.size(), 0);
+  
+  // start by appending address (0, 0, 0, ..., 0) and aggregation 0 to the SAT
+  for (size_t i = 0; i < address_columns.size(); ++i) {
+    OK_OR_DIE(compressed_address_builders[i].Append(0));
+  }
+  OK_OR_DIE(compressed_aggregation_builder.Append(0));
+  
+  while (!row_itor.next()) {
+    // first, increment integral
+    aggregation_so_far += row_itor.cols_.back().value<arrow::DoubleType>();
+
+    // then, check if address is now different. If so
+    // add aggregation and current address
+    bool differs = false;
+    for (size_t i = 0; i < address_columns.size(); ++i) {
+      uint32_t this_v = row_itor.cols_[i].value<arrow::UInt32Type>();
+      if (this_v != addresses[i]) {
+        differs = true;
+      }
+    }
+    if (differs) {
+      for (size_t i = 0; i < address_columns.size(); ++i) {
+        addresses[i] = row_itor.cols_[i].value<arrow::UInt32Type>();
+        OK_OR_DIE(compressed_address_builders[i].Append(addresses[i]));
+      }
+      OK_OR_DIE(compressed_aggregation_builder.Append(aggregation_so_far));
+    }
+  }
+
+  // finally, add upper boundary of integral, address (max, max, ..., max) and
+  // total aggregation to the SAT
+  
+  for (size_t i = 0; i < address_columns.size(); ++i) {
+    OK_OR_DIE(compressed_address_builders[i].Append(std::numeric_limits<uint32_t>::max()));
+  }
+  OK_OR_DIE(compressed_aggregation_builder.Append(aggregation_so_far));
+
+  std::vector<std::shared_ptr<arrow::Field> > fields;
+  std::vector<std::shared_ptr<arrow::Array> > arrays;
+
+  for (size_t i = 0; i < address_columns.size(); ++i) {
+    fields.push_back(arrow::field(address_columns[i], arrow::uint32(), false));
+    arrays.push_back(compressed_address_builders[i].Finish().ValueOrDie());
+  }
+  fields.push_back(arrow::field(aggregation_column, arrow::float64(), false));
+  arrays.push_back(compressed_aggregation_builder.Finish().ValueOrDie());
+  return arrow::Table::Make(
+      arrow::schema(fields),
+      arrays);
+}
+
+/******************************************************************************/
 // reindex an unsorted chunked array given the result of sort_indices
 // returns chunked array with the same chunking structure as the passed array.
 
@@ -312,7 +387,7 @@ permute_chunked_array(
     for (size_t j = 0; j < chunk_size; ++j) {
       uint64_t ix = indices_cast->Value(offset++);
       uint32_t v = accessor.value<ArrowType>(ix);
-      builder.Append(v);
+      OK_OR_DIE(builder.Append(v));
     }
     vecs.push_back(builder.Finish().ValueOrDie());
   }
