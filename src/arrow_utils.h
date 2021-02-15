@@ -231,6 +231,25 @@ struct RowIterator
 
   std::vector<ChunkedArrayIterator> cols_;
 
+  // when looking to skip nulls in next() calls, it's necessary to
+  // call ensure_not_null() to initialize the row iterator to a
+  // correct position.
+  //
+  // this is not included in the constructor because it's possible
+  // there are no valid entries (all rows are null, ie for every index
+  // at least one column is null)
+  bool ensure_not_null() {
+    bool need_skip = false;
+    for (auto &it: cols_) {
+      need_skip = need_skip || it.is_null();
+    }
+    if (need_skip) {
+      return next(true);
+    } else {
+      return false;
+    }
+  }
+
   // advances all iterators in lockstep
   // postcondition:
   // cols_[i].array_offset == cols[j].array_offset for all i,j

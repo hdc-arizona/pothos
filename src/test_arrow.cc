@@ -329,6 +329,7 @@ void test_arrow_convenience()
   RowIterator itor({
       ChunkedArrayIterator(table->GetColumnByName("col1")),
       ChunkedArrayIterator(table->GetColumnByName("col2"))});
+  itor.ensure_not_null();
 
   do {
     for (size_t i = 0; i < 2; ++i) {
