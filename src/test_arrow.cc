@@ -320,9 +320,30 @@ void test_arrow_cube(std::string filename)
   auto sorted_df = Table::Make(schema(fields), sorted_columns);
 }
 
+void test_arrow_convenience()
+{
+  shared_ptr table = make_table(
+      {{ "col1", make_chunked_array<UInt32Type>({ 1, 2, 3, 4, 5 }, {false, true, false, true, false})},
+       { "col2", make_chunked_array<UInt32Type>({ 1, 2, 3, 4, 5 }) }});
+
+  RowIterator itor({
+      ChunkedArrayIterator(table->GetColumnByName("col1")),
+      ChunkedArrayIterator(table->GetColumnByName("col2"))});
+
+  do {
+    for (size_t i = 0; i < 2; ++i) {
+      cerr << itor.cols_[i].value<UInt32Type>() << " ";
+    }
+    cerr << endl;
+
+  } while (!itor.next());
+}
+
+
 int main(int argc, char **argv)
 {
   const std::string filename = "/Users/cscheid/data/nyc-tlc/feather/yellow_tripdata_2014-02.feather";
   // test_with_nyc_pickup_data(argv[1]);
-  test_arrow_cube(filename);
+  // test_arrow_cube(filename);
+  test_arrow_convenience();
 }
