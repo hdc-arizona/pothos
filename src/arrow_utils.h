@@ -226,8 +226,13 @@ struct ChunkedArrayIterator
 // We assume that all of these iterators have the same length()
 struct RowIterator
 {
-  explicit RowIterator(const std::vector<ChunkedArrayIterator> &cols)
-      : cols_(cols) {};
+  explicit RowIterator(const std::vector<ChunkedArrayIterator> &cols,
+                       bool skip_null=true)
+      : cols_(cols) {
+    if (skip_null) {
+      ensure_not_null();
+    }
+  };
 
   std::vector<ChunkedArrayIterator> cols_;
 
@@ -250,6 +255,10 @@ struct RowIterator
     }
   }
 
+  bool done() const {
+    return cols_[0].done();
+  }
+  
   // advances all iterators in lockstep
   // postcondition:
   // cols_[i].array_offset == cols[j].array_offset for all i,j
@@ -322,6 +331,8 @@ compress_aggregation(
   arrow::NumericBuilder<arrow::DoubleType> compressed_aggregation_builder;
 
   RowIterator row_itor(itors);
+  DIE_WHEN(row_itor.done()); // this means no rows available.
+    
   double aggregation_so_far = 0;
   std::vector<uint32_t> addresses(address_columns.size(), 0);
   
@@ -331,12 +342,8 @@ compress_aggregation(
   }
   OK_OR_DIE(compressed_aggregation_builder.Append(0));
   
-  while (!row_itor.next()) {
-    // first, increment integral
-    aggregation_so_far += row_itor.cols_.back().value<arrow::DoubleType>();
-
-    // then, check if address is now different. If so
-    // add aggregation and current address
+  do {
+    // check if address is different
     bool differs = false;
     for (size_t i = 0; i < address_columns.size(); ++i) {
       uint32_t this_v = row_itor.cols_[i].value<arrow::UInt32Type>();
@@ -344,6 +351,7 @@ compress_aggregation(
         differs = true;
       }
     }
+    // If so, add old aggregation total using new address as boundary
     if (differs) {
       for (size_t i = 0; i < address_columns.size(); ++i) {
         addresses[i] = row_itor.cols_[i].value<arrow::UInt32Type>();
@@ -351,7 +359,9 @@ compress_aggregation(
       }
       OK_OR_DIE(compressed_aggregation_builder.Append(aggregation_so_far));
     }
-  }
+    // last, increment aggregation
+    aggregation_so_far += row_itor.cols_.back().value<arrow::DoubleType>();
+  } while (!row_itor.next());
 
   // finally, add upper boundary of integral, address (max, max, ..., max) and
   // total aggregation to the SAT

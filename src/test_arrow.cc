@@ -320,24 +320,49 @@ void test_arrow_cube(std::string filename)
   auto sorted_df = Table::Make(schema(fields), sorted_columns);
 }
 
+
 void test_arrow_convenience()
 {
   shared_ptr table = make_table(
-      {{ "col1", make_chunked_array<UInt32Type>({ 1, 2, 3, 4, 5 }, {false, true, false, true, false})},
-       { "col2", make_chunked_array<UInt32Type>({ 1, 2, 3, 4, 5 }) }});
+      {{ "col1", make_chunked_array<UInt32Type>({ 0, 0, 0, 1, 1, 1, 2, 2, 2 }) },
+       { "col2", make_chunked_array<UInt32Type>({ 0, 0, 1, 0, 2, 2, 1, 2, 2 }) },
+       { "agg",  make_chunked_array<DoubleType>({ 1, 1, 1, 1, 1, 1, 1, 1, 1 }) }
+      });
 
-  RowIterator itor({
-      ChunkedArrayIterator(table->GetColumnByName("col1")),
-      ChunkedArrayIterator(table->GetColumnByName("col2"))});
-  itor.ensure_not_null();
+  {
+    RowIterator itor({
+        ChunkedArrayIterator(table->GetColumnByName("col1")),
+        ChunkedArrayIterator(table->GetColumnByName("col2")),
+        ChunkedArrayIterator(table->GetColumnByName("agg"))
+      });
 
-  do {
-    for (size_t i = 0; i < 2; ++i) {
-      cerr << itor.cols_[i].value<UInt32Type>() << " ";
-    }
-    cerr << endl;
+    do {
+      for (size_t i = 0; i < 2; ++i) {
+        cerr << itor.cols_[i].value<UInt32Type>() << " ";
+      }
+      cerr << "agg: " << itor.cols_[2].value<DoubleType>() << endl;
+    } while (!itor.next());
+  }
+  
+  table = compress_aggregation(table, { "col1", "col2" }, "agg");
 
-  } while (!itor.next());
+  {
+    RowIterator itor({
+        ChunkedArrayIterator(table->GetColumnByName("col1")),
+        ChunkedArrayIterator(table->GetColumnByName("col2")),
+        ChunkedArrayIterator(table->GetColumnByName("agg"))
+      });
+
+    do {
+      for (size_t i = 0; i < 2; ++i) {
+        cerr << itor.cols_[i].value<UInt32Type>() << " ";
+      }
+      cerr << "agg: " << itor.cols_[2].value<DoubleType>() << endl;
+    } while (!itor.next());
+  }
+  
+  
+  /****************************************************************************/
 }
 
 
