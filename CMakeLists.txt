@@ -76,3 +76,10 @@ target_include_directories(test_arrow PUBLIC ${ARROW_INCLUDE_DIR})
 target_link_directories(test_arrow PUBLIC ${ARROW_LIBRARY_DIR})
 
 target_link_libraries(test_arrow PUBLIC arrow)
+
+################################################################################
+
+add_executable(test_htm
+  src/test_htm.cc
+  )
+
