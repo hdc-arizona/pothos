@@ -1,5 +1,6 @@
 #pragma once
 
+/******************************************************************************/
 // a clean-room implementation of the HTM indexing code
 //
 // all we need is the computation of the htm_id for a given ra-dec, so
@@ -36,61 +37,70 @@ struct Vec3
   Vec3(double x, double y, double z): x(x), y(y), z(z) {}
   Vec3(const Vec3 &o): x(o.x), y(o.y), z(o.z) {}
 
-  Vec3 &operator=(const Vec3 &o) {
+  inline Vec3 &operator=(const Vec3 &o) {
     x = o.x;
     y = o.y;
     z = o.z;
     return *this;
   }
 
-  Vec3 &operator+=(const Vec3 &o) {
+  inline Vec3 &operator+=(const Vec3 &o) {
     x += o.x;
     y += o.y;
     z += o.z;
     return *this;
   }
 
-  Vec3 &operator-=(const Vec3 &o) {
+  inline Vec3 &operator-=(const Vec3 &o) {
     x -= o.x;
     y -= o.y;
     z -= o.z;
     return *this;
   }
   
-  Vec3& operator*=(double v) {
+  inline Vec3& operator*=(double v) {
     x *= v;
     y *= v;
     z *= v;
     return *this;
   }
+
+  inline Vec3& normalize() {
+    double n = x * x + y * y + z * z;
+    double s = 1.0 / sqrt(n);
+    x *= s;
+    y *= s;
+    z *= s;
+    return *this;
+  }
 };
 
-Vec3 operator+(const Vec3 &v1, const Vec3 &v2) {
+inline Vec3 operator+(const Vec3 &v1, const Vec3 &v2) {
   Vec3 result(v1);
   result += v2;
   return result;
 }
 
-Vec3 operator-(const Vec3 &v1, const Vec3 &v2) {
+inline Vec3 operator-(const Vec3 &v1, const Vec3 &v2) {
   Vec3 result(v1);
   result -= v2;
   return result;
 }
 
-Vec3 operator*(const Vec3 &v, double s) {
+inline Vec3 operator*(const Vec3 &v, double s) {
   Vec3 result(v);
   result *= s;
   return result;
 }
 
-Vec3 cross(const Vec3 &v1, const Vec3 &v2) {
+inline Vec3 cross(const Vec3 &v1, const Vec3 &v2) {
   return Vec3(
       v1.y * v2.z - v2.y * v1.z,
       v1.z * v2.x - v2.z * v1.x,
       v1.x * v2.y - v2.x * v1.y);
 }
 
-double dot(const Vec3 &v1, const Vec3 &v2) {
+inline double dot(const Vec3 &v1, const Vec3 &v2) {
   return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
 }
 
@@ -115,7 +125,7 @@ struct Tri
     v[2] = o.v[2];
   }
   
-  bool contains(const Vec3 &vec) const {
+  inline bool contains(const Vec3 &vec) const {
     const double eps = -1e-15;
     if (dot(vec, cross(v[0], v[1])) < eps) return false;
     if (dot(vec, cross(v[1], v[2])) < eps) return false;
@@ -144,26 +154,27 @@ Vec3 to_sphere(const Vec2 &v)
 
 /******************************************************************************/
 
+const Vec3 base_v[6] = {
+  Vec3( 0.0,  0.0,  1.0),
+  Vec3( 1.0,  0.0,  0.0),
+  Vec3( 0.0,  1.0,  0.0),
+  Vec3(-1.0,  0.0,  0.0),
+  Vec3( 0.0, -1.0,  0.0),
+  Vec3( 0.0,  0.0, -1.0)
+};
+const Tri base_t[8] = {
+  Tri(base_v[1], base_v[5], base_v[2]), // S0
+  Tri(base_v[2], base_v[5], base_v[3]), // S1
+  Tri(base_v[3], base_v[5], base_v[4]), // S2
+  Tri(base_v[4], base_v[5], base_v[1]), // S3
+  Tri(base_v[1], base_v[0], base_v[4]), // N0
+  Tri(base_v[4], base_v[0], base_v[3]), // N1
+  Tri(base_v[3], base_v[0], base_v[2]), // N2
+  Tri(base_v[2], base_v[0], base_v[1])  // N3
+};
+
 Tri bounding_tri(const Vec3 &v, size_t level)
 {
-  const Vec3 base_v[6] = {
-    Vec3( 0.0,  0.0,  1.0),
-    Vec3( 1.0,  0.0,  0.0),
-    Vec3( 0.0,  1.0,  0.0),
-    Vec3(-1.0,  0.0,  0.0),
-    Vec3( 0.0, -1.0,  0.0),
-    Vec3( 0.0,  0.0, -1.0)
-  };
-  const Tri base_t[8] = {
-    Tri(base_v[1], base_v[5], base_v[2]), // S0
-    Tri(base_v[2], base_v[5], base_v[3]), // S1
-    Tri(base_v[3], base_v[5], base_v[4]), // S2
-    Tri(base_v[4], base_v[5], base_v[1]), // S3
-    Tri(base_v[1], base_v[0], base_v[4]), // N0
-    Tri(base_v[4], base_v[0], base_v[3]), // N1
-    Tri(base_v[3], base_v[0], base_v[2]), // N2
-    Tri(base_v[2], base_v[0], base_v[1])  // N3
-  };
 
   size_t i;
   for (i = 0; i < 8; ++i) {
@@ -171,16 +182,22 @@ Tri bounding_tri(const Vec3 &v, size_t level)
       break;
     }
   }
-  DIE_WHEN(i == 8);
+  // DIE_WHEN(i == 8);
   
   Tri t = base_t[i];
   while (level > 0) {
-    // see the long comment below if you're wondering
-    // why we don't normalize the vectors here.
-    const Vec3 w[3] = {
-      (t.v[1] + t.v[2]) * 0.5,
-      (t.v[0] + t.v[2]) * 0.5,
-      (t.v[0] + t.v[1]) * 0.5
+    // see the long comment below for a discussion on a faster variant
+    // of the implementation
+    //
+    // const Vec3 w[3] = {
+    //   (t.v[1] + t.v[2]) * 0.5,
+    //   (t.v[0] + t.v[2]) * 0.5,
+    //   (t.v[0] + t.v[1]) * 0.5
+    // };
+    Vec3 w[3] = {
+      (t.v[1] + t.v[2]).normalize(),
+      (t.v[0] + t.v[2]).normalize(),
+      (t.v[0] + t.v[1]).normalize()
     };
     const Tri sector_t[4] = {
       Tri(t.v[0], w[2], w[1]),
@@ -194,7 +211,7 @@ Tri bounding_tri(const Vec3 &v, size_t level)
         break;
       }
     }
-    DIE_WHEN(i == 4);
+    // DIE_WHEN(i == 4);
     t = sector_t[i];
     --level;
   }
@@ -203,25 +220,6 @@ Tri bounding_tri(const Vec3 &v, size_t level)
 
 uint64_t htm_id(const Vec3 &v, size_t level)
 {
-  const Vec3 base_v[6] = {
-    Vec3( 0.0,  0.0,  1.0),
-    Vec3( 1.0,  0.0,  0.0),
-    Vec3( 0.0,  1.0,  0.0),
-    Vec3(-1.0,  0.0,  0.0),
-    Vec3( 0.0, -1.0,  0.0),
-    Vec3( 0.0,  0.0, -1.0)
-  };
-  const Tri base_t[8] = {
-    Tri(base_v[1], base_v[5], base_v[2]), // S0
-    Tri(base_v[2], base_v[5], base_v[3]), // S1
-    Tri(base_v[3], base_v[5], base_v[4]), // S2
-    Tri(base_v[4], base_v[5], base_v[1]), // S3
-    Tri(base_v[1], base_v[0], base_v[4]), // N0
-    Tri(base_v[4], base_v[0], base_v[3]), // N1
-    Tri(base_v[3], base_v[0], base_v[2]), // N2
-    Tri(base_v[2], base_v[0], base_v[1])  // N3
-  };
-
   size_t i;
   for (i = 0; i < 8; ++i) {
     if (base_t[i].contains(v)) {
@@ -229,16 +227,17 @@ uint64_t htm_id(const Vec3 &v, size_t level)
     }
   }
 
-  DIE_WHEN(i == 8);
+  // DIE_WHEN(i == 8);
   
   Tri t = base_t[i];
   size_t current_address = i + 8;
   while (level > 0) {
-    const Vec3 w[3] = {
-      (t.v[1] + t.v[2]) * 0.5,
-      (t.v[0] + t.v[2]) * 0.5,
-      (t.v[0] + t.v[1]) * 0.5
-    };
+    /**************************************************************************/
+    // Vec3 w[3] = {
+    //   (t.v[1] + t.v[2]) * 0.5,
+    //   (t.v[0] + t.v[2]) * 0.5,
+    //   (t.v[0] + t.v[1]) * 0.5
+    // };
     // If you're looking at that code and wondering why it's not
     // normalizing the vector, this is for you!
     // 
@@ -247,8 +246,8 @@ uint64_t htm_id(const Vec3 &v, size_t level)
     // vectors. However, the triple scalar products computed by
     // Triangle::contains() are invariant to vector rescalings, (this
     // is obvious since they're fundamentally halfspace tests), and so
-    // we don't need to normalize the vectors! This should provide
-    // some minor speedup.
+    // we don't need to normalize the vectors! This would provide
+    // a real speedup.
     //
     // In addition, according to the HTM paper, at level 26, some of
     // the trig functions break down.  At that level, the product of
@@ -268,7 +267,8 @@ uint64_t htm_id(const Vec3 &v, size_t level)
     // namely dividing the vector by 2. The performance overhead of
     // this multiplication should be negligible, since it's just
     // decrementing the exponent of the number (which I expect to be
-    // an optimization in the FPUs).
+    // an optimization in the FPUs), and this operation keeps the
+    // magnitude of the vectors bounded.
     //
     // According to
     // https://www.agner.org/optimize/instruction_tables.pdf,
@@ -286,11 +286,23 @@ uint64_t htm_id(const Vec3 &v, size_t level)
     // So that's some ~180 cycles per level saved right there, about
     // 3800 cycles for computing a HTM id at the SDSS level. That's
     // almost a microsecond difference per HTM id computation.
-    // 
-    // "it ain't much, but it's honest work"
     //
-    // next up, we actually should inspect the assembly that clang
-    // emits...
+    // In a microbenchmark on my Coffee Lake MBP, I get about 2.75M
+    // calls per second to compute HTM ids up to level 21 with this
+    // trick, and 1.76M calls per second without. It's 50% faster!
+    //
+    // TODO: Write up why this is still a bad idea in the context
+    // of the current calculations of HTM id
+    /**************************************************************************/
+    
+    Vec3 w[3] = {
+      (t.v[1] + t.v[2]).normalize(),
+      (t.v[0] + t.v[2]).normalize(),
+      (t.v[0] + t.v[1]).normalize()
+    };
+    // w[0] *= 1.0 / sqrt(dot(w[0], w[0]));
+    // w[1] *= 1.0 / sqrt(dot(w[1], w[1]));
+    // w[2] *= 1.0 / sqrt(dot(w[2], w[2]));
     
     const Tri sector_t[4] = {
       Tri(t.v[0], w[2], w[1]),
@@ -304,7 +316,7 @@ uint64_t htm_id(const Vec3 &v, size_t level)
         break;
       }
     }
-    DIE_WHEN(i == 4);
+    // DIE_WHEN(i == 4);
     t = sector_t[i];
     current_address = current_address * 4 + i;
     --level;

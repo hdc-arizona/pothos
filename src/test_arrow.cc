@@ -1,10 +1,6 @@
-#include <arrow/ipc/feather.h>
-#include <arrow/io/file.h>
-#include <arrow/io/buffered.h>
 #include <arrow/memory_pool.h>
 #include <arrow/table.h>
 #include <arrow/array.h>
-#include <arrow/builder.h>
 #include <arrow/compute/api_vector.h>
 
 #include <boost/assert.hpp>
@@ -35,28 +31,6 @@ void describe_table(shared_ptr<Table> arrow)
   for (auto &it: schema->field_names()) {
     cerr << "    " << it << endl;
   }
-}
-
-shared_ptr<Table> read_table(const std::string& path)
-{
-  Status st;
-
-  auto file = io::ReadableFile::Open(path).ValueOrDie();
-
-  std::shared_ptr<ipc::feather::Reader> feather_reader =
-      ipc::feather::Reader::Open(file).ValueOrDie();
-
-  shared_ptr<Table> arrow;
-
-  st = feather_reader->Read(&arrow);
-  if (!st.ok()) {
-    cerr << "Error reading file" << endl;
-    cerr << st.ToString() << endl;
-  } else {
-    cerr << "Read file " << path << " ok." << endl;
-  }
-
-  return arrow;
 }
 
 pair<double, double>
@@ -218,7 +192,7 @@ shared_ptr<Table> make_address_table(shared_ptr<Table> arrow)
 
 void test_with_nyc_pickup_data(std::string filename)
 {
-  shared_ptr<Table> arrow = read_table(filename);
+  shared_ptr<Table> arrow = read_feather_table(filename);
 
   // cerr << "Bounds:" << endl;
   // cerr << "  pickup_latitude: " << col_bounds("pickup_latitude", arrow) << endl;
@@ -290,7 +264,7 @@ struct CountPolicy
 void test_arrow_cube(std::string filename)
 {
   shared_ptr<Table>
-      arrow = read_table(filename),
+      arrow = read_feather_table(filename),
       addresses = make_address_table(arrow);
       
   // nc2::ArrowCube ac(addresses, { "pickup_latitude", "pickup_longitude" });
