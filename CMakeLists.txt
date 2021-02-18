@@ -69,6 +69,7 @@ target_link_libraries(test_nyc_pickup ${Boost_LIBRARIES})
 
 add_executable(test_arrow
   src/test_arrow.cc
+  src/arrow_utils.cc
   )
 
 target_include_directories(test_arrow PUBLIC ${ARROW_INCLUDE_DIR})
@@ -83,3 +84,15 @@ add_executable(test_htm
   src/test_htm.cc
   )
 
+################################################################################
+
+add_executable(test_ztf_arrow
+  src/test_ztf_arrow.cc
+  src/arrow_utils.cc
+  )
+
+target_include_directories(test_ztf_arrow PUBLIC ${ARROW_INCLUDE_DIR})
+
+target_link_directories(test_ztf_arrow PUBLIC ${ARROW_LIBRARY_DIR})
+
+target_link_libraries(test_ztf_arrow PUBLIC arrow)

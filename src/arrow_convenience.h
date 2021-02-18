@@ -2,7 +2,6 @@
 
 #include <arrow/array.h>
 #include <arrow/table.h>
-#include <unordered_map>
 #include <memory>
 #include <algorithm>
 
@@ -10,21 +9,6 @@
 
 // convenience functions for Apache Arrow
 /******************************************************************************/
-
-// convenience method to build a table out of named columns
-// with no schema (so we use the column types to build one)
-std::shared_ptr<arrow::Table> make_table(
-    std::unordered_map<std::string, std::shared_ptr<arrow::ChunkedArray> > columns)
-{
-  std::vector<std::shared_ptr<arrow::Field>> fields;
-  std::vector<std::shared_ptr<arrow::ChunkedArray>> arrays;
-
-  for (auto &pair: columns) {
-    fields.push_back(arrow::field(pair.first, pair.second->type(), false));
-    arrays.push_back(pair.second);
-  }
-  return arrow::Table::Make(arrow::schema(fields), arrays);
-}
 
 // currently this only works for NumericBuilders, and it's pretty
 // inefficient.

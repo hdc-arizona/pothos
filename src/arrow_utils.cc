@@ -5,9 +5,40 @@
 #include <arrow/io/buffered.h>
 
 #include <iostream>
+#include <algorithm>
 
 using namespace std;
 using namespace arrow;
+
+/******************************************************************************/
+
+void describe_table(std::shared_ptr<arrow::Table> arrow)
+{
+  auto schema = arrow->schema();
+
+  cerr << "Description:" << endl;
+
+  cerr << "  " << schema->num_fields() << " fields" << endl;
+  cerr << "  " << arrow->column(0)->length() << " rows" << endl;
+  for (auto &field: schema->fields()) {
+    cerr << "    " << field->name() << ": " << field->type()->ToString() << endl;
+  }
+}
+
+// convenience method to build a table out of named columns
+// with no schema (so we use the column types to build one)
+shared_ptr<Table> make_table(
+    unordered_map<string, shared_ptr<ChunkedArray> > columns)
+{
+  vector<shared_ptr<Field>> fields;
+  vector<shared_ptr<ChunkedArray>> arrays;
+
+  for (auto &pair: columns) {
+    fields.push_back(arrow::field(pair.first, pair.second->type(), false));
+    arrays.push_back(pair.second);
+  }
+  return arrow::Table::Make(arrow::schema(fields), arrays);
+}
 
 /******************************************************************************/
 
@@ -103,4 +134,22 @@ compress_aggregation(
   return arrow::Table::Make(
       arrow::schema(fields),
       arrays);
+}
+
+
+/******************************************************************************/
+
+shared_ptr<Table>
+arrow_cbind(const vector<shared_ptr<Table> > &tables)
+{
+  vector<shared_ptr<Field>> fields;
+  vector<shared_ptr<ChunkedArray>> arrays;
+
+  for (auto &table: tables) {
+    vector<shared_ptr<Field>> table_fields = table->fields();
+    vector<shared_ptr<ChunkedArray>> table_columns = table->columns();
+    copy(table_fields.begin(), table_fields.end(), back_inserter(fields));
+    copy(table_columns.begin(), table_columns.end(), back_inserter(arrays));
+  }
+  return Table::Make(arrow::schema(fields), arrays);
 }

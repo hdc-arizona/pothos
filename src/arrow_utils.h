@@ -10,75 +10,73 @@
 
 /******************************************************************************/
 
+std::shared_ptr<arrow::Table> make_table(
+    std::unordered_map<std::string, std::shared_ptr<arrow::ChunkedArray>> columns);
+
 std::shared_ptr<arrow::Table> read_feather_table(const std::string &path);
 
-/******************************************************************************/
+void describe_table(std::shared_ptr<arrow::Table> arrow);
 
 template <typename TraitType, typename T>
 void arrow_foreach(
     std::shared_ptr<arrow::ChunkedArray> column,
-    T closure)
-{
-  for (auto &chunk: column->chunks()) {
-    auto concrete_chunk = std::static_pointer_cast<typename arrow::TypeTraits<TraitType>::ArrayType>(chunk);
-    for (int i = 0; i < concrete_chunk->length(); ++i) {
-      closure(concrete_chunk->Value(i));
-    }
-  }
-}
+    T closure);
 
-/******************************************************************************/
-
-// this is lower overhead than the exec.h infra in arrow, but it's also
-// clearly much less general. This assumes always same types and no nulls
-// it's also not clear whether this is _faster_...
 template <typename TraitType, typename T>
 void arrow_foreach(
     std::shared_ptr<arrow::ChunkedArray> column_1,
     std::shared_ptr<arrow::ChunkedArray> column_2,
-    T closure)
-{
-  auto chunks1 = column_1->chunks();
-  auto chunks2 = column_2->chunks();
+    T closure);
 
-  size_t sz1 = chunks1.size(), sz2 = chunks2.size();
+/******************************************************************************/
+/// cbind: combines columns from two different tables.
+///
+/// no error checking for now: tables are assumed to have the same
+/// number of rows and
 
-  size_t ci_1 = 0, ci_2 = 0;
-  size_t i_1 = 0, i_2 = 0;
-      
-  if (ci_1 == sz1 || ci_2 == sz2) {
-    // one of the two chunked arrays is empty: exit.
-    return;
-  }
-  auto chunk_1 = std::static_pointer_cast<typename arrow::TypeTraits<TraitType>::ArrayType>(chunks1[ci_1]);
-  auto chunk_2 = std::static_pointer_cast<typename arrow::TypeTraits<TraitType>::ArrayType>(chunks2[ci_2]);
-  size_t sz_c1 = chunk_1->length(), sz_c2 = chunk_2->length();
+std::shared_ptr<arrow::Table>
+arrow_cbind(const std::vector<std::shared_ptr<arrow::Table> > &tables);
 
-  while (ci_1 < sz1 && ci_2 < sz2) {
-    if (i_1 == sz_c1) {
-      i_1 = 0;
-      ++ci_1;
-      chunk_1 = std::static_pointer_cast<typename arrow::TypeTraits<TraitType>::ArrayType>(chunks1[ci_1]);
-      sz_c1 = chunk_1->length();
-      continue; // this is slightly inefficient but clearer that we need to recheck bounds
-    }
-    if (i_2 == sz_c2) {
-      i_2 = 0;
-      ++ci_2;
-      chunk_2 = std::static_pointer_cast<typename arrow::TypeTraits<TraitType>::ArrayType>(chunks2[ci_2]);
-      sz_c2 = chunk_2->length();
-      continue; // this is slightly inefficient but clearer that we need to recheck bounds
-    }
+/******************************************************************************/
+/// compress_aggregation: takes a table sorted with respect to
+/// address_columns and an aggregation column and compresses it such
+/// that the tuple implied by address_columns rows is unique, and
+/// aggregates over the aggregation column using the same name.
+///
+/// This simple data structure lies at the heart of a number of practical, fast
+/// filtering tricks.
+///
+/// gotchas:
+///
+/// assumes a single aggregation column of doubles and that addition is
+/// what we want.
+///
+/// assumes address columns are all UInt32Type
+///
+/// assumes arrays are non-empty, consistently chunked, and of the same size.
+/// 
+/// doesn't itself chunk the arrays
+///
 
-    typename arrow::TypeTraits<TraitType>::CType
-        v1 = chunk_1->Value(i_1),
-        v2 = chunk_2->Value(i_2);
+std::shared_ptr<arrow::Table>
+compress_aggregation(
+    std::shared_ptr<arrow::Table> input,
+    const std::vector<std::string> &address_columns,
+    const std::string &aggregation_column);
 
-    closure(v1, v2);
-    ++i_1;
-    ++i_2;
-  }
-}
+/******************************************************************************/
+/// reindex an unsorted chunked array given the result of sort_indices
+/// returns chunked array with the same chunking structure as the passed array.
+///
+/// gotchas:
+/// 
+/// assumes no nulls
+
+template <typename ArrowType>
+std::shared_ptr<arrow::ChunkedArray>
+permute_chunked_array(
+    const arrow::ChunkedArray &chunked_array,
+    std::shared_ptr<arrow::Array> indices);
 
 /******************************************************************************/
 
@@ -122,6 +120,7 @@ struct ChunkedArrayAccessor
     ix = 0;
   }
 };
+
 
 /******************************************************************************/
 
@@ -239,8 +238,26 @@ struct RowIterator
     }
   };
 
+  explicit RowIterator(const std::vector<std::shared_ptr<arrow::ChunkedArray>> &cols,
+                       bool skip_null=true) {
+    for (auto &col: cols) {
+      cols_.push_back(ChunkedArrayIterator(col));
+    }
+    if (skip_null) {
+      ensure_not_null();
+    }
+  }
+
   std::vector<ChunkedArrayIterator> cols_;
 
+  bool some_null() const {
+    bool some_null_b = false;
+    for (auto &it: cols_) {
+      some_null_b = some_null_b || it.is_null();
+    }
+    return some_null_b;
+  }
+  
   // when looking to skip nulls in next() calls, it's necessary to
   // call ensure_not_null() to initialize the row iterator to a
   // correct position.
@@ -249,11 +266,7 @@ struct RowIterator
   // there are no valid entries (all rows are null, ie for every index
   // at least one column is null)
   bool ensure_not_null() {
-    bool need_skip = false;
-    for (auto &it: cols_) {
-      need_skip = need_skip || it.is_null();
-    }
-    if (need_skip) {
+    if (some_null()) {
       return next(true);
     } else {
       return false;
@@ -262,6 +275,13 @@ struct RowIterator
 
   bool done() const {
     return cols_[0].done();
+  }
+
+  template <typename T>
+  void for_each(T closure, bool skip_null = true) {
+    do {
+      closure(*this);
+    } while (!next(skip_null));
   }
   
   // advances all iterators in lockstep
@@ -275,7 +295,9 @@ struct RowIterator
     if (!skip_null) {
       bool result = true;
       for (auto &it: cols_) {
-        result = result && it.next(false);
+        // the ordering here looks goofy so we don't get burned by the
+        // shortcircuiting rules of &&
+        result = it.next(false) && result;
       }
       return result;
     }
@@ -310,58 +332,13 @@ struct RowIterator
   }
 };
 
-/******************************************************************************/
-//
-// assumes aggregation column is a double and addition is what we want.
-//
-// assumes address columns are all UInt32Type
-//
-// assumes arrays are non-empty, consistently chunked, and of the same size.
-// 
-// doesn't chunk arrays
-//
-
-std::shared_ptr<arrow::Table>
-compress_aggregation(
-    std::shared_ptr<arrow::Table> input,
-    const std::vector<std::string> &address_columns,
-    const std::string &aggregation_column);
-
-/******************************************************************************/
-// reindex an unsorted chunked array given the result of sort_indices
-// returns chunked array with the same chunking structure as the passed array.
-
-template <typename ArrowType>
+// given a closure that expects a reference to the passed row iterator
+// and which produces a value of TraitType::CType, construct
+// a ChunkedArray of Array<TraitType> by iterating over the rows.
+template <typename ArrowType, typename T>
 std::shared_ptr<arrow::ChunkedArray>
-permute_chunked_array(
-    const arrow::ChunkedArray &chunked_array,
-    std::shared_ptr<arrow::Array> indices)
-{
-  // TODO: figure out how to do this type-generically.
-  //
-  // TODO: figure out how to handle nulls;
-  // 
-  // vector_sort.cc creates a vector of type with run-time-constructed types.
-  // that's what we should base our impl off of.
-  //
-  // But I don't know how to make Builders work in this manner
-  auto indices_cast = std::static_pointer_cast<arrow::UInt64Array>(indices);
-  arrow::NumericBuilder<ArrowType> builder;
+map_rows(RowIterator &rows, T closure);
 
-  ChunkedArrayAccessor accessor(chunked_array);
+/******************************************************************************/
 
-  std::vector<std::shared_ptr<arrow::Array>> vecs;
-
-  size_t offset = 0;
-  for (size_t i = 0; i < chunked_array.chunks().size(); ++i) {
-    size_t chunk_size = chunked_array.chunks()[i]->length();
-    for (size_t j = 0; j < chunk_size; ++j) {
-      uint64_t ix = indices_cast->Value(offset++);
-      uint32_t v = accessor.value<ArrowType>(ix);
-      OK_OR_DIE(builder.Append(v));
-    }
-    vecs.push_back(builder.Finish().ValueOrDie());
-  }
-
-  return std::shared_ptr<arrow::ChunkedArray>(new arrow::ChunkedArray(vecs));
-}
+#include "arrow_utils.hh"

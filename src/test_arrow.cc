@@ -21,18 +21,6 @@
 using namespace std;
 using namespace arrow;
 
-void describe_table(shared_ptr<Table> arrow)
-{
-  auto schema = arrow->schema();
-
-  cerr << "Description:" << endl;
-
-  cerr << "  " << schema->num_fields() << " fields" << endl;
-  for (auto &it: schema->field_names()) {
-    cerr << "    " << it << endl;
-  }
-}
-
 pair<double, double>
 col_bounds(const std::string &colname,
            shared_ptr<Table> arrow)
@@ -294,7 +282,6 @@ void test_arrow_cube(std::string filename)
   auto sorted_df = Table::Make(schema(fields), sorted_columns);
 }
 
-
 void test_arrow_convenience()
 {
   shared_ptr table = make_table(
@@ -309,7 +296,7 @@ void test_arrow_convenience()
         ChunkedArrayIterator(table->GetColumnByName("col2")),
         ChunkedArrayIterator(table->GetColumnByName("agg"))
       });
-
+    
     do {
       for (size_t i = 0; i < 2; ++i) {
         cerr << itor.cols_[i].value<UInt32Type>() << " ";
@@ -334,9 +321,6 @@ void test_arrow_convenience()
       cerr << "agg: " << itor.cols_[2].value<DoubleType>() << endl;
     } while (!itor.next());
   }
-  
-  
-  /****************************************************************************/
 }
 
 
