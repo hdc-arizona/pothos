@@ -54,7 +54,10 @@ int main(int argc, char **argv)
   compute::SortOptions options({
       compute::SortKey("htm20", compute::SortOrder::Ascending)
     });
-  
+
+  auto sort_permutation = compute::CallFunction(
+      "sort_indices", { Datum(t) }, &options).ValueOrDie().make_array();
+
   t = sort_table(t, &options);
     
   RowIterator({

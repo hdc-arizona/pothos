@@ -89,7 +89,7 @@ permute_chunked_array_t(
     size_t chunk_size = chunked_array.chunks()[i]->length();
     for (size_t j = 0; j < chunk_size; ++j) {
       uint64_t ix = indices_cast->Value(offset++);
-      uint32_t v = accessor.value<ArrowType>(ix);
+      typename arrow::TypeTraits<ArrowType>::CType v = accessor.value<ArrowType>(ix);
       OK_OR_DIE(builder.Append(v));
     }
     vecs.push_back(builder.Finish().ValueOrDie());
