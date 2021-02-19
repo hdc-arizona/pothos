@@ -264,22 +264,7 @@ void test_arrow_cube(std::string filename)
   compute::SortOptions options({
       compute::SortKey("pickup_latitude", compute::SortOrder::Ascending)
     });
-  auto sort_permutation = compute::CallFunction("sort_indices", { Datum(addresses) }, &options)
-      .ValueOrDie().make_array();
-
-  vector<shared_ptr<Field> > fields;
-  vector<shared_ptr<ChunkedArray> > sorted_columns;
-  vector<string> names { "pickup_latitude", "pickup_longitude" };
-
-  for (auto &name: names) {
-    sorted_columns.push_back(
-        permute_chunked_array<UInt32Type>(
-            *addresses->GetColumnByName(name),
-            sort_permutation));
-    fields.push_back(field(name, shared_ptr<DataType>(new UInt32Type), false));
-  }
-  
-  auto sorted_df = Table::Make(schema(fields), sorted_columns);
+  auto sorted_df = sort_table(addresses, &options);
 }
 
 void test_arrow_convenience()

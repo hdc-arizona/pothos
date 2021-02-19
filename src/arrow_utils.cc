@@ -153,3 +153,66 @@ arrow_cbind(const vector<shared_ptr<Table> > &tables)
   }
   return Table::Make(arrow::schema(fields), arrays);
 }
+
+/******************************************************************************/
+// this is ugly and makes a bloated binary. I don't know how to fix it, though..
+
+// permutes an array generically. I'm sure this doesn't work
+// for all types because there's an infinite number of them; but we
+// should make it work for all numeric types.
+std::shared_ptr<arrow::ChunkedArray>
+permute_chunked_array(
+    const arrow::ChunkedArray &chunked_array,
+    std::shared_ptr<arrow::Array> indices)
+{
+  auto type = chunked_array.type();
+  if (type->Equals(arrow::int8())) {
+    return permute_chunked_array_t<Int8Type>(chunked_array, indices);
+  } else if (type->Equals(arrow::uint8())) {
+    return permute_chunked_array_t<UInt8Type>(chunked_array, indices);
+  } else if (type->Equals(arrow::int16())) {
+    return permute_chunked_array_t<Int16Type>(chunked_array, indices);
+  } else if (type->Equals(arrow::uint16())) {
+    return permute_chunked_array_t<UInt16Type>(chunked_array, indices);
+  } else if (type->Equals(arrow::int32())) {
+    return permute_chunked_array_t<Int32Type>(chunked_array, indices);
+  } else if (type->Equals(arrow::uint32())) {
+    return permute_chunked_array_t<UInt32Type>(chunked_array, indices);
+  } else if (type->Equals(arrow::int64())) {
+    return permute_chunked_array_t<Int64Type>(chunked_array, indices);
+  } else if (type->Equals(arrow::uint64())) {
+    return permute_chunked_array_t<UInt64Type>(chunked_array, indices);
+  } else if (type->Equals(arrow::float32())) {
+    return permute_chunked_array_t<FloatType>(chunked_array, indices);
+  } else if (type->Equals(arrow::float64())) {
+    return permute_chunked_array_t<DoubleType>(chunked_array, indices);
+  } else {
+    DIE("don't know how to handle type " << type->ToString());
+  }
+}
+
+// assumes all columns are numeric...
+std::shared_ptr<Table>
+permute_table(std::shared_ptr<Table> input,
+              std::shared_ptr<arrow::Array> indices)
+{
+  vector<shared_ptr<ChunkedArray> > sorted_columns;
+
+  for (size_t i = 0; i < input->num_columns(); ++i) {
+    sorted_columns.push_back(
+        permute_chunked_array(
+            *input->column(i),
+            indices));
+  }
+  
+  return Table::Make(input->schema(), sorted_columns); 
+}
+
+std::shared_ptr<Table>
+sort_table(std::shared_ptr<Table> input,
+           const arrow::compute::SortOptions *options)
+{
+  auto sort_permutation = compute::CallFunction(
+      "sort_indices", { Datum(input) }, options).ValueOrDie().make_array();
+  return permute_table(input, sort_permutation);
+}

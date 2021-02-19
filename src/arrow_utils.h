@@ -1,5 +1,6 @@
 #pragma once
 
+#include <arrow/compute/api_vector.h>
 #include <arrow/builder.h>
 #include <arrow/array.h>
 #include <arrow/table.h>
@@ -74,9 +75,24 @@ compress_aggregation(
 
 template <typename ArrowType>
 std::shared_ptr<arrow::ChunkedArray>
+permute_chunked_array_t(
+    const arrow::ChunkedArray &chunked_array,
+    std::shared_ptr<arrow::Array> indices);
+
+std::shared_ptr<arrow::ChunkedArray>
 permute_chunked_array(
     const arrow::ChunkedArray &chunked_array,
     std::shared_ptr<arrow::Array> indices);
+
+std::shared_ptr<arrow::Table>
+permute_table(
+    std::shared_ptr<arrow::Table> input,
+    std::shared_ptr<arrow::Array> indices);
+
+std::shared_ptr<arrow::Table>
+sort_table(
+    std::shared_ptr<arrow::Table> input,
+    const arrow::compute::SortOptions *options);
 
 /******************************************************************************/
 

@@ -72,18 +72,11 @@ void arrow_foreach(
 
 template <typename ArrowType>
 std::shared_ptr<arrow::ChunkedArray>
-permute_chunked_array(
+permute_chunked_array_t(
     const arrow::ChunkedArray &chunked_array,
     std::shared_ptr<arrow::Array> indices)
 {
-  // TODO: figure out how to do this type-generically.
-  //
   // TODO: figure out how to handle nulls;
-  // 
-  // vector_sort.cc creates a vector of type with run-time-constructed types.
-  // that's what we should base our impl off of.
-  //
-  // But I don't know how to make Builders work in this manner
   auto indices_cast = std::static_pointer_cast<arrow::UInt64Array>(indices);
   arrow::NumericBuilder<ArrowType> builder;
 
@@ -104,6 +97,9 @@ permute_chunked_array(
 
   return std::shared_ptr<arrow::ChunkedArray>(new arrow::ChunkedArray(vecs));
 }
+
+// FIXME: this works for all numeric types, but not in general. Don't
+// know how to do this in general.
 
 /******************************************************************************/
 

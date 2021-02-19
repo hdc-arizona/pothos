@@ -50,7 +50,13 @@ int main(int argc, char **argv)
 
     t = arrow_cbind({t, make_table({{"htm20", htm_ids}})});
   }
+
+  compute::SortOptions options({
+      compute::SortKey("htm20", compute::SortOrder::Ascending)
+    });
   
+  t = sort_table(t, &options);
+    
   RowIterator({
       t->GetColumnByName("ra"),
       t->GetColumnByName("dec"),
@@ -60,6 +66,6 @@ int main(int argc, char **argv)
            << rows.cols_[1].value<DoubleType>() << " "
            << rows.cols_[2].value<UInt64Type>() << " "
            << endl;
-    });
+   });
   return 0;
 }
