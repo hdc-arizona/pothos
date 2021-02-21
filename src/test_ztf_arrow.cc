@@ -44,30 +44,45 @@ int main(int argc, char **argv)
               dec = rows.cols_[1].value<DoubleType>();
           Vec2 v(ra, dec);
         
-          uint64_t result = htm_id(to_sphere(v), 20);
+          uint64_t result = htm_id(to_sphere(v), 10);
           return result;
         });
+    RowIterator rows_2({
+        t->GetColumnByName("ra"),
+        t->GetColumnByName("dec")
+      });
+    
+    shared_ptr<ChunkedArray> one =
+        map_rows<UInt64Type>(rows_2, []() {
+          return 1;
+        });
 
-    t = arrow_cbind({t, make_table({{"htm20", htm_ids}})});
+    t = arrow_cbind({
+        t, make_table({
+            {"htm_id", htm_ids},
+            {"count", one}
+          })});
   }
 
   compute::SortOptions options({
-      compute::SortKey("htm20", compute::SortOrder::Ascending)
+      compute::SortKey("htm_id", compute::SortOrder::Ascending)
     });
 
   auto sort_permutation = compute::CallFunction(
       "sort_indices", { Datum(t) }, &options).ValueOrDie().make_array();
 
   t = sort_table(t, &options);
+  cerr << "Sorted" << endl;
+
+  t = CompressAggregation<UInt64Type, UInt64Type>::call(t, { "htm_id" }, "count");
+  cerr << "Aggregated" << endl;
     
   RowIterator({
-      t->GetColumnByName("ra"),
-      t->GetColumnByName("dec"),
-      t->GetColumnByName("htm20")
+      t->GetColumnByName("htm_id"),
+      t->GetColumnByName("count")
     }).for_each([](RowIterator &rows) {
-      cerr << rows.cols_[0].value<DoubleType>() << " "
-           << rows.cols_[1].value<DoubleType>() << " "
-           << rows.cols_[2].value<UInt64Type>() << " "
+      cerr << rows.cols_[0].value<UInt64Type>() << " "
+           << rows.cols_[1].value<UInt64Type>() << " "
            << endl;
    });
   return 0;

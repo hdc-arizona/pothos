@@ -49,21 +49,24 @@ arrow_cbind(const std::vector<std::shared_ptr<arrow::Table> > &tables);
 ///
 /// gotchas:
 ///
-/// assumes a single aggregation column of doubles and that addition is
-/// what we want.
-///
-/// assumes address columns are all UInt32Type
+/// Assumes + is what we want
 ///
 /// assumes arrays are non-empty, consistently chunked, and of the same size.
 /// 
 /// doesn't itself chunk the arrays
 ///
 
-std::shared_ptr<arrow::Table>
-compress_aggregation(
-    std::shared_ptr<arrow::Table> input,
-    const std::vector<std::string> &address_columns,
-    const std::string &aggregation_column);
+template <typename AddressType,
+          typename AggregationType>
+class CompressAggregation
+{
+ public:
+  static std::shared_ptr<arrow::Table>
+  call(
+      std::shared_ptr<arrow::Table> input,
+      const std::vector<std::string> &address_columns,
+      const std::string &aggregation_column);
+};
 
 /******************************************************************************/
 /// reindex an unsorted chunked array given the result of sort_indices

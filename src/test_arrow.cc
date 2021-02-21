@@ -290,7 +290,8 @@ void test_arrow_convenience()
     } while (!itor.next());
   }
   
-  table = compress_aggregation(table, { "col1", "col2" }, "agg");
+  table = CompressAggregation<UInt32Type, DoubleType>::call(
+      table, { "col1", "col2" }, "agg");
 
   {
     RowIterator itor({
