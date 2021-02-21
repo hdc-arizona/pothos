@@ -7,6 +7,8 @@
 #include <iostream>
 #include <algorithm>
 
+#include "arrow_convenience.h"
+
 using namespace std;
 using namespace arrow;
 
@@ -28,7 +30,7 @@ void describe_table(std::shared_ptr<arrow::Table> arrow)
 // convenience method to build a table out of named columns
 // with no schema (so we use the column types to build one)
 shared_ptr<Table> make_table(
-    unordered_map<string, shared_ptr<ChunkedArray> > columns)
+    const unordered_map<string, shared_ptr<ChunkedArray> > &columns)
 {
   vector<shared_ptr<Field>> fields;
   vector<shared_ptr<ChunkedArray>> arrays;
@@ -66,80 +68,95 @@ shared_ptr<Table> read_feather_table(const std::string& path)
 
 /******************************************************************************/
 
-template <typename AddressType,
-          typename AggregationType>
+template <typename AddrT, typename AggrT>
 std::shared_ptr<arrow::Table>
-CompressAggregation<AddressType, AggregationType>::call(
+CompressAggregation<AddrT, AggrT>::call(
     std::shared_ptr<arrow::Table> input,
-    const std::vector<std::string> &address_columns,
-    const std::string &aggregation_column)
+    const std::vector<std::string> &addr_columns,
+    const std::vector<std::string> &aggr_columns)
 {
-  typedef typename TypeTraits<AddressType>::CType CAddressType;
-  typedef typename TypeTraits<AggregationType>::CType CAggregationType;
-  
+  typedef typename TypeTraits<AddrT>::CType CAddrT;
+  typedef typename TypeTraits<AggrT>::CType CAggrT;
+
   std::vector<ChunkedArrayIterator> itors;
-  for (auto &name: address_columns) {
+  for (auto &name: addr_columns) {
     itors.push_back(ChunkedArrayIterator(input->GetColumnByName(name)));
   }
-  std::vector<arrow::NumericBuilder<AddressType>> compressed_address_builders(itors.size());
+  std::vector<arrow::NumericBuilder<AddrT>> addr_builders(itors.size());
+
+  size_t agg_cols_b = itors.size();
+  for (auto &name: aggr_columns) {
+    itors.push_back(ChunkedArrayIterator(input->GetColumnByName(name)));
+  }
+  size_t agg_cols_e = itors.size();
   
-  itors.push_back(ChunkedArrayIterator(input->GetColumnByName(aggregation_column)));
-  arrow::NumericBuilder<AggregationType> compressed_aggregation_builder;
+  std::vector<arrow::NumericBuilder<AggrT>>
+      aggr_builders(aggr_columns.size());
 
   RowIterator row_itor(itors);
   DIE_WHEN(row_itor.done()); // this means no rows available.
-    
-  CAggregationType aggregation_so_far = 0;
-  std::vector<CAddressType> addresses(address_columns.size(), 0);
+
+  std::vector<CAggrT> aggr_so_far(aggr_columns.size(), CAggrT(0));
+  std::vector<CAddrT> addresses(addr_columns.size(), CAddrT(0));
   
-  // start by appending address (0, 0, 0, ..., 0) and aggregation 0 to the SAT
-  for (size_t i = 0; i < address_columns.size(); ++i) {
-    OK_OR_DIE(compressed_address_builders[i].Append(0));
+  // start by appending address (0, 0, 0, ..., 0) and aggregation (0,0,0,...,0) to the SAT
+  for (size_t i = 0; i < addr_columns.size(); ++i) {
+    OK_OR_DIE(addr_builders[i].Append(CAddrT(0)));
   }
-  OK_OR_DIE(compressed_aggregation_builder.Append(0));
+  for (size_t i = 0; i < aggr_columns.size(); ++i) {
+    OK_OR_DIE(aggr_builders[i].Append(CAggrT(0)));
+  }
   
   do {
     // check if address is different
     bool differs = false;
-    for (size_t i = 0; i < address_columns.size(); ++i) {
-      CAddressType this_v = row_itor.cols_[i].value<AddressType>();
+    for (size_t i = 0; i < addr_columns.size(); ++i) {
+      CAddrT this_v = row_itor.cols_[i].value<AddrT>();
       if (this_v != addresses[i]) {
         differs = true;
       }
     }
     // If so, add old aggregation total using new address as boundary
     if (differs) {
-      for (size_t i = 0; i < address_columns.size(); ++i) {
-        addresses[i] = row_itor.cols_[i].value<AddressType>();
-        OK_OR_DIE(compressed_address_builders[i].Append(addresses[i]));
+      for (size_t i = 0; i < addr_columns.size(); ++i) {
+        addresses[i] = row_itor.cols_[i].value<AddrT>();
+        OK_OR_DIE(addr_builders[i].Append(addresses[i]));
       }
-      OK_OR_DIE(compressed_aggregation_builder.Append(aggregation_so_far));
+      for (size_t i = 0; i < aggr_columns.size(); ++i) {
+        OK_OR_DIE(aggr_builders[i].Append(aggr_so_far[i]));
+      }
     }
     // last, increment aggregation
-    aggregation_so_far += row_itor.cols_.back().value<AggregationType>();
+    for (size_t i = agg_cols_b; i < agg_cols_e; ++i) {
+      aggr_so_far[i-agg_cols_b] += row_itor.cols_[i].value<AggrT>();
+    }
   } while (!row_itor.next());
 
   // finally, add upper boundary of integral, address (max, max, ..., max) and
   // total aggregation to the SAT
   
-  for (size_t i = 0; i < address_columns.size(); ++i) {
-    OK_OR_DIE(compressed_address_builders[i].Append(
-        std::numeric_limits<CAddressType>::max()));
+  for (size_t i = 0; i < addr_columns.size(); ++i) {
+    OK_OR_DIE(addr_builders[i].Append(std::numeric_limits<CAddrT>::max()));
   }
-  OK_OR_DIE(compressed_aggregation_builder.Append(aggregation_so_far));
+  for (size_t i = 0; i < aggr_columns.size(); ++i) {
+    OK_OR_DIE(aggr_builders[i].Append(aggr_so_far[i]));
+  }
 
   std::vector<std::shared_ptr<arrow::Field> > fields;
   std::vector<std::shared_ptr<arrow::Array> > arrays;
+  std::unordered_map<std::string, std::shared_ptr<arrow::ChunkedArray>> cols;
 
-  for (size_t i = 0; i < address_columns.size(); ++i) {
-    fields.push_back(arrow::field(address_columns[i], std::shared_ptr<arrow::DataType>(new AddressType()), false));
-    arrays.push_back(compressed_address_builders[i].Finish().ValueOrDie());
+  for (size_t i = 0; i < addr_columns.size(); ++i) {
+    auto a = std::shared_ptr<arrow::ChunkedArray>(
+        new ChunkedArray({ addr_builders[i].Finish().ValueOrDie() }));
+    cols[addr_columns[i]] = a;
   }
-  fields.push_back(arrow::field(aggregation_column, std::shared_ptr<arrow::DataType>(new AggregationType()), false));
-  arrays.push_back(compressed_aggregation_builder.Finish().ValueOrDie());
-  return arrow::Table::Make(
-      arrow::schema(fields),
-      arrays);
+  for (size_t i = 0; i < aggr_columns.size(); ++i) {
+    auto a = std::shared_ptr<arrow::ChunkedArray>(
+        new ChunkedArray({ aggr_builders[i].Finish().ValueOrDie() }));
+    cols[aggr_columns[i]] = a;
+  }
+  return make_table(cols);
 }
 
 template class CompressAggregation<UInt32Type, UInt32Type>;

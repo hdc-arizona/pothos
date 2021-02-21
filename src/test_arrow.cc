@@ -291,7 +291,7 @@ void test_arrow_convenience()
   }
   
   table = CompressAggregation<UInt32Type, DoubleType>::call(
-      table, { "col1", "col2" }, "agg");
+      table, { "col1", "col2" }, { "agg" });
 
   {
     RowIterator itor({

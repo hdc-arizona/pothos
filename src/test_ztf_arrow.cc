@@ -1,4 +1,5 @@
 #include <arrow/ipc/feather.h>
+#include <arrow/io/api.h>
 #include <arrow/io/file.h>
 #include <arrow/io/buffered.h>
 #include <arrow/memory_pool.h>
@@ -21,7 +22,7 @@
 #include "arrowcube.h"
 
 #include "htm.h"
-
+#include <iomanip>
 /******************************************************************************/
 
 using namespace std;
@@ -43,7 +44,7 @@ int main(int argc, char **argv)
           double ra = rows.cols_[0].value<DoubleType>(),
               dec = rows.cols_[1].value<DoubleType>();
           Vec2 v(ra, dec);
-        
+          
           uint64_t result = htm_id(to_sphere(v), 10);
           return result;
         });
@@ -53,8 +54,8 @@ int main(int argc, char **argv)
       });
     
     shared_ptr<ChunkedArray> one =
-        map_rows<UInt64Type>(rows_2, []() {
-          return 1;
+        map_rows<DoubleType>(rows_2, []() {
+          return 1.0;
         });
 
     t = arrow_cbind({
@@ -74,16 +75,27 @@ int main(int argc, char **argv)
   t = sort_table(t, &options);
   cerr << "Sorted" << endl;
 
-  t = CompressAggregation<UInt64Type, UInt64Type>::call(t, { "htm_id" }, "count");
+  t = CompressAggregation<UInt64Type, DoubleType>::call(
+      t, { "htm_id" }, { "count", "magpsf" });
   cerr << "Aggregated" << endl;
     
-  RowIterator({
-      t->GetColumnByName("htm_id"),
-      t->GetColumnByName("count")
-    }).for_each([](RowIterator &rows) {
-      cerr << rows.cols_[0].value<UInt64Type>() << " "
-           << rows.cols_[1].value<UInt64Type>() << " "
-           << endl;
-   });
+  // cerr << setprecision(10);
+  // RowIterator({
+  //     t->GetColumnByName("htm_id"),
+  //     t->GetColumnByName("count"),
+  //     t->GetColumnByName("magpsf")
+  //   }).for_each([](RowIterator &rows) {
+  //     cerr << rows.cols_[0].value<UInt64Type>() << " "
+  //          << rows.cols_[1].value<DoubleType>() << " "
+  //          << rows.cols_[2].value<DoubleType>() << " "
+  //          << endl;
+  //  });
+
+  std::shared_ptr<arrow::io::FileOutputStream> file
+      = arrow::io::FileOutputStream::Open("agg.feather_u", /*append=*/true).ValueOrDie();
+  
+  OK_OR_DIE(arrow::ipc::feather::WriteTable(*t, file.get()));
+  OK_OR_DIE(file->Close());
+  
   return 0;
 }

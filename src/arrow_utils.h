@@ -12,7 +12,7 @@
 /******************************************************************************/
 
 std::shared_ptr<arrow::Table> make_table(
-    std::unordered_map<std::string, std::shared_ptr<arrow::ChunkedArray>> columns);
+    const std::unordered_map<std::string, std::shared_ptr<arrow::ChunkedArray>> &columns);
 
 std::shared_ptr<arrow::Table> read_feather_table(const std::string &path);
 
@@ -39,13 +39,17 @@ std::shared_ptr<arrow::Table>
 arrow_cbind(const std::vector<std::shared_ptr<arrow::Table> > &tables);
 
 /******************************************************************************/
-/// compress_aggregation: takes a table sorted with respect to
+/// CompressAggregation::call() takes a table sorted with respect to
 /// address_columns and an aggregation column and compresses it such
 /// that the tuple implied by address_columns rows is unique, and
 /// aggregates over the aggregation column using the same name.
 ///
 /// This simple data structure lies at the heart of a number of practical, fast
 /// filtering tricks.
+///
+/// We're using static struct fields to do explicit template instantiation,
+/// which I can't get the compiler to do for functions that change their
+/// implementations based on templates, but do not change their signatures.
 ///
 /// gotchas:
 ///
@@ -65,7 +69,7 @@ class CompressAggregation
   call(
       std::shared_ptr<arrow::Table> input,
       const std::vector<std::string> &address_columns,
-      const std::string &aggregation_column);
+      const std::vector<std::string> &aggregation_column);
 };
 
 /******************************************************************************/
@@ -247,6 +251,8 @@ struct ChunkedArrayIterator
 
 // A "row" is simply represented as a vector of column ChunkedArrayIterators
 // We assume that all of these iterators have the same length()
+//
+// Do not reuse RowIterators!
 struct RowIterator
 {
   explicit RowIterator(const std::vector<ChunkedArrayIterator> &cols,
