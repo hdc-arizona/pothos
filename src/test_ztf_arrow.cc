@@ -1,5 +1,6 @@
 #include <arrow/ipc/feather.h>
 #include <arrow/io/api.h>
+#include <arrow/ipc/writer.h>
 #include <arrow/io/file.h>
 #include <arrow/io/buffered.h>
 #include <arrow/memory_pool.h>
@@ -90,12 +91,14 @@ int main(int argc, char **argv)
   //          << rows.cols_[2].value<DoubleType>() << " "
   //          << endl;
   //  });
-
-  std::shared_ptr<arrow::io::FileOutputStream> file
-      = arrow::io::FileOutputStream::Open("agg.feather_u", /*append=*/true).ValueOrDie();
   
-  OK_OR_DIE(arrow::ipc::feather::WriteTable(*t, file.get()));
-  OK_OR_DIE(file->Close());
+  std::shared_ptr<arrow::io::FileOutputStream> file
+      = arrow::io::FileOutputStream::Open("agg.arrow", /*append=*/true).ValueOrDie();
+
+  std::shared_ptr<arrow::ipc::RecordBatchWriter> writer = arrow::ipc::MakeFileWriter(file, t->schema()).ValueOrDie();
+
+  OK_OR_DIE(writer->WriteTable(*t));
+  OK_OR_DIE(writer->Close());
   
   return 0;
 }

@@ -16,7 +16,8 @@ endif()
 # include(cmake/FindArrow.cmake) findarrow doesn't work, so we'll do it by hand
 
 set (ARROW_INCLUDE_DIR /Users/cscheid/repos/github/apache/arrow/cpp/src)
-set (ARROW_LIBRARY_DIR /Users/cscheid/repos/github/apache/arrow/cpp/release/release)
+# set (ARROW_LIBRARY_DIR /Users/cscheid/repos/github/apache/arrow/cpp/release/release)
+set (ARROW_LIBRARY_DIR /Users/cscheid/repos/github/apache/arrow/cpp/debug/debug)
 
 # let me say this will all my heart: fuck cmake
 
@@ -96,3 +97,15 @@ target_include_directories(test_ztf_arrow PUBLIC ${ARROW_INCLUDE_DIR})
 target_link_directories(test_ztf_arrow PUBLIC ${ARROW_LIBRARY_DIR})
 
 target_link_libraries(test_ztf_arrow PUBLIC arrow)
+
+################################################################################
+
+add_executable(test_arrow_write
+  src/test_arrow_write
+  )
+
+target_include_directories(test_arrow_write PUBLIC ${ARROW_INCLUDE_DIR})
+
+target_link_directories(test_arrow_write PUBLIC ${ARROW_LIBRARY_DIR})
+
+target_link_libraries(test_arrow_write PUBLIC arrow)
