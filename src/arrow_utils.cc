@@ -6,6 +6,8 @@
 
 #include <iostream>
 #include <algorithm>
+#include <sstream>
+#include <memory>
 
 #include "arrow_convenience.h"
 
@@ -40,6 +42,21 @@ shared_ptr<Table> make_table(
     arrays.push_back(pair.second);
   }
   return arrow::Table::Make(arrow::schema(fields), arrays);
+}
+
+void write_arrow(
+    shared_ptr<Table> table,
+    const string &path,
+    int64_t max_chunk_size)
+{
+  shared_ptr<io::FileOutputStream>
+      file = io::FileOutputStream::Open(path).ValueOrDie();
+
+  shared_ptr<ipc::RecordBatchWriter>
+      writer = ipc::MakeFileWriter(file, table->schema()).ValueOrDie();
+
+  OK_OR_DIE(writer->WriteTable(*table, max_chunk_size));
+  OK_OR_DIE(writer->Close());
 }
 
 /******************************************************************************/
@@ -247,4 +264,52 @@ sort_table(std::shared_ptr<Table> input,
   auto sort_permutation = compute::CallFunction(
       "sort_indices", { Datum(input) }, options).ValueOrDie().make_array();
   return permute_table(input, sort_permutation);
+}
+
+/******************************************************************************/
+
+shared_ptr<Table>
+make_gaussian_stats_table(
+    const vector<shared_ptr<ChunkedArray>> &cols)
+{
+  vector<NumericBuilder<DoubleType>>
+      builders((cols.size() + 1) * (cols.size() + 2) / 2);
+  int sz = (int) cols.size();
+  RowIterator(cols).for_each([&builders, &sz](RowIterator &rows) {
+    size_t ix = 0;
+    for (int i = -1; i < sz; ++i) {
+      double v1 = (i == -1) ? 1.0 : rows.cols_[i].value<DoubleType>();
+      for (int j = i; j < sz; ++j) {
+        double v2 = (j == -1) ? 1.0 : rows.cols_[j].value<DoubleType>();
+        OK_OR_DIE(builders[ix++].Append(v1 * v2));
+      }
+    }
+  });
+  unordered_map<string, shared_ptr<ChunkedArray>> result;
+  size_t ix = 0;
+  for (auto &builder: builders) {
+    stringstream ss;
+    ss << "s" << (ix++);
+    result[ss.str()] = shared_ptr<ChunkedArray>(new ChunkedArray({ builder.Finish().ValueOrDie() }));
+  }
+  return make_table(result);
+}
+
+shared_ptr<Table>
+make_gaussian_stats_table(
+    shared_ptr<Table> t,
+    const vector<string> &col_names)
+{
+  vector<shared_ptr<ChunkedArray>>
+      cols;
+  for (auto &name: col_names) {
+    cols.push_back(t->GetColumnByName(name));
+  }
+  return make_gaussian_stats_table(cols);
+}
+
+shared_ptr<Table>
+make_gaussian_stats_table(shared_ptr<Table> t)
+{
+  return make_gaussian_stats_table(t->columns());
 }

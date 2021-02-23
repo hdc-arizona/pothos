@@ -1,9 +1,13 @@
 #pragma once
 
 #include <arrow/compute/api_vector.h>
+#include <arrow/io/file.h>
+#include <arrow/io/api.h>
 #include <arrow/builder.h>
 #include <arrow/array.h>
 #include <arrow/table.h>
+#include <arrow/ipc/writer.h>
+
 #include <memory>
 #include <unordered_map>
 
@@ -28,6 +32,11 @@ void arrow_foreach(
     std::shared_ptr<arrow::ChunkedArray> column_1,
     std::shared_ptr<arrow::ChunkedArray> column_2,
     T closure);
+
+void write_arrow(
+    std::shared_ptr<arrow::Table> table,
+    const std::string &path,
+    int64_t max_chunk_size = -1);
 
 /******************************************************************************/
 /// cbind: combines columns from two different tables.
@@ -255,6 +264,19 @@ struct ChunkedArrayIterator
 // Do not reuse RowIterators!
 struct RowIterator
 {
+  explicit RowIterator(std::shared_ptr<arrow::Table> table,
+                       const std::vector<std::string> &names,
+                       bool skip_null=true)
+  {
+    std::vector<std::shared_ptr<arrow::ChunkedArray>> cols;
+    for (auto &name: names) {
+      cols_.push_back(ChunkedArrayIterator(table->GetColumnByName(name)));
+    }
+    if (skip_null) {
+      ensure_not_null();
+    }
+  }
+  
   explicit RowIterator(const std::vector<ChunkedArrayIterator> &cols,
                        bool skip_null=true)
       : cols_(cols) {
@@ -363,6 +385,29 @@ struct RowIterator
 template <typename ArrowType, typename T>
 std::shared_ptr<arrow::ChunkedArray>
 map_rows(RowIterator &rows, T closure);
+
+// same as above, but construct the RowIterator internally
+// given a table and some columns
+template <typename ArrowType, typename T>
+std::shared_ptr<arrow::ChunkedArray>
+map_rows(std::shared_ptr<arrow::Table> t,
+         const std::vector<std::string> &col_names,
+         T closure);
+
+/******************************************************************************/
+// create the table of sufficient statistics to fit gaussians.
+// this is (|cols|+1)(|cols|+2)/2
+//
+// the selected columns must all be DoubleType
+
+std::shared_ptr<arrow::Table>
+make_gaussian_stats_table(
+    std::shared_ptr<arrow::Table> t,
+    const std::vector<std::string> &cols);
+
+// This assumes all columns are to be selected.
+std::shared_ptr<arrow::Table>
+make_gaussian_stats_table(std::shared_ptr<arrow::Table> t);
 
 /******************************************************************************/
 

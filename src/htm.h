@@ -8,11 +8,12 @@
 //
 // https://arxiv.org/pdf/cs/0701164.pdf
 
-// FIXME this isn't an arrow thing.
-#include "arrow_macros.h"
 #include <iostream>
+#include <cmath>
 
 /******************************************************************************/
+
+namespace htm {
 
 // sphere coords in ra/dec
 struct Vec2
@@ -132,6 +133,10 @@ struct Tri
     if (dot(vec, cross(v[2], v[0])) < eps) return false;
     return true;
   }
+  
+  Vec3 centroid() const {
+    return (v[0] + v[1] + v[2]).normalize();
+  }
 };
 
 std::ostream& operator<<(std::ostream &os, const Tri &v)
@@ -141,15 +146,40 @@ std::ostream& operator<<(std::ostream &os, const Tri &v)
 
 /******************************************************************************/
 
-Vec3 to_sphere(const Vec2 &v)
+Vec3 to_cartesian(const Vec2 &v)
 {
   const double pi = 3.1415926535897932385;
   const double to_rad = pi / 180.0;
 
   double cd = cos(v.dec * to_rad);
+
+  // x = cos(r) * cos(d)
+  // y = sin(r) * cos(d)
+  // z = sin(d)
+      
   return Vec3(cos(v.ra  * to_rad) * cd,
               sin(v.ra  * to_rad) * cd,
               sin(v.dec * to_rad));
+}
+
+Vec2 to_spherical(const Vec3 &v)
+{
+  const double pi = 3.1415926535897932385;
+  const double to_deg = 180 / pi;
+
+  // inverting the above, we first get
+  // asin(z) = asin(sin(d)) = d
+  //
+  // y / cos(d) = sin(r)
+  // asin(y / cos(d)) = asin(sin(r)) = r
+  //
+  // we only use asins to not to have to check signs
+  
+  double dec = asin(v.z);
+  double cd = cos(dec);
+  double ra = asin(v.y / cd);
+
+  return Vec2(ra * to_deg, dec * to_deg);
 }
 
 /******************************************************************************/
@@ -172,6 +202,74 @@ const Tri base_t[8] = {
   Tri(base_v[3], base_v[0], base_v[2]), // N2
   Tri(base_v[2], base_v[0], base_v[1])  // N3
 };
+
+// https://graphics.stanford.edu/~seander/bithacks.html#IntegerLogIEEE64Float
+// slightly adapted
+inline int ilog2(uint64_t v)
+{
+#define LT(n) n, n, n, n, n, n, n, n, n, n, n, n, n, n, n, n
+  static const char LogTable256[256] = 
+      {
+        -1, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
+        LT(4), LT(5), LT(5), LT(6), LT(6), LT(6), LT(6),
+        LT(7), LT(7), LT(7), LT(7), LT(7), LT(7), LT(7), LT(7)
+      };
+
+  uint32_t t, tt; // temporaries
+  unsigned s = 0;
+  t = uint32_t(v);
+  
+  tt = uint32_t(v >> 32LL);
+  if (tt) {
+    s += 32;
+    t = tt;
+  }
+  tt = t >> 16;
+  if (tt) {
+    s += 16;
+    t = tt;
+  }
+  tt = t >> 8;
+  if (tt) {
+    s += 8;
+    t = tt;
+  }
+  return s + LogTable256[t];
+}
+
+int depth(uint64_t htm_id)
+{
+  return (ilog2(htm_id) >> 1) - 1;
+}
+
+Vec3 centroid(uint64_t htm_id)
+{
+  int d = depth(htm_id);
+  int b = htm_id >> (2 * d);
+  Tri t = base_t[b - 8];
+  
+  while (d > 0) {
+    --d;
+    int direction = (htm_id >> (2 * d)) & 3;
+    Vec3 w[3] = {
+      (t.v[1] + t.v[2]).normalize(),
+      (t.v[0] + t.v[2]).normalize(),
+      (t.v[0] + t.v[1]).normalize()
+    };
+    // w[0] *= 1.0 / sqrt(dot(w[0], w[0]));
+    // w[1] *= 1.0 / sqrt(dot(w[1], w[1]));
+    // w[2] *= 1.0 / sqrt(dot(w[2], w[2]));
+    
+    const Tri sector_t[4] = {
+      Tri(t.v[0], w[2], w[1]),
+      Tri(t.v[1], w[0], w[2]),
+      Tri(t.v[2], w[1], w[0]),
+      Tri(  w[0], w[1], w[2])
+    };
+    t = sector_t[direction];
+  }
+  return t.centroid();
+}
 
 Tri bounding_tri(const Vec3 &v, size_t level)
 {
@@ -323,3 +421,5 @@ uint64_t htm_id(const Vec3 &v, size_t level)
   }
   return current_address;
 }
+
+};

@@ -1,13 +1,8 @@
-#include <arrow/ipc/feather.h>
-#include <arrow/io/api.h>
-#include <arrow/ipc/writer.h>
-#include <arrow/io/file.h>
-#include <arrow/io/buffered.h>
-#include <arrow/memory_pool.h>
 #include <arrow/table.h>
 #include <arrow/array.h>
 #include <arrow/builder.h>
 #include <arrow/compute/api_vector.h>
+#include <arrow/pretty_print.h>
 
 #include <boost/assert.hpp>
 
@@ -28,10 +23,19 @@
 
 using namespace std;
 using namespace arrow;
+using namespace htm;
+
+template <typename BuilderT>
+std::shared_ptr<ChunkedArray> from_builder(BuilderT &b)
+{
+  return shared_ptr<ChunkedArray>(
+      new ChunkedArray( { b.Finish().ValueOrDie() } ));
+}
 
 int main(int argc, char **argv)
 {
-  shared_ptr<Table> t = read_feather_table("/Users/cscheid/data/ztf/feather-summaries/20200918_summary.feather_u");
+  shared_ptr<Table> t = read_feather_table(
+      "/Users/cscheid/data/ztf/feather-summaries/20200918_summary.feather_u");
   describe_table(t);
 
   {
@@ -40,65 +44,51 @@ int main(int argc, char **argv)
         t->GetColumnByName("dec")
       });
 
+    NumericBuilder<DoubleType> x, y, z;
     shared_ptr<ChunkedArray> htm_ids =
-        map_rows<UInt64Type>(rows, [&rows]() {
+        map_rows<UInt64Type>(rows, [&rows, &x, &y, &z]() {
           double ra = rows.cols_[0].value<DoubleType>(),
               dec = rows.cols_[1].value<DoubleType>();
           Vec2 v(ra, dec);
-          
-          uint64_t result = htm_id(to_sphere(v), 10);
+          Vec3 c = to_cartesian(v);
+          OK_OR_DIE(x.Append(c.x));
+          OK_OR_DIE(y.Append(c.y));
+          OK_OR_DIE(z.Append(c.z));
+          uint64_t result = htm_id(c, 10);
           return result;
         });
-    RowIterator rows_2({
-        t->GetColumnByName("ra"),
-        t->GetColumnByName("dec")
-      });
-    
-    shared_ptr<ChunkedArray> one =
-        map_rows<DoubleType>(rows_2, []() {
-          return 1.0;
-        });
 
-    t = arrow_cbind({
-        t, make_table({
-            {"htm_id", htm_ids},
-            {"count", one}
-          })});
+    shared_ptr<Table> xyz = make_table({
+        { "x", from_builder(x) },
+        { "y", from_builder(y) },
+        { "z", from_builder(z) }
+      });
+
+    shared_ptr<Table> g = make_gaussian_stats_table(xyz);
+
+    t = arrow_cbind({t, g, make_table({{"htm_id", htm_ids}})});
   }
 
   compute::SortOptions options({
       compute::SortKey("htm_id", compute::SortOrder::Ascending)
     });
-
-  auto sort_permutation = compute::CallFunction(
-      "sort_indices", { Datum(t) }, &options).ValueOrDie().make_array();
-
   t = sort_table(t, &options);
-  cerr << "Sorted" << endl;
-
   t = CompressAggregation<UInt64Type, DoubleType>::call(
-      t, { "htm_id" }, { "count", "magpsf" });
+      t, { "htm_id" },
+      { "magpsf",
+        "s0",
+        "s1", 
+        "s2", 
+        "s3", 
+        "s4", 
+        "s5", 
+        "s6", 
+        "s7", 
+        "s8", 
+        "s9" });
   cerr << "Aggregated" << endl;
-    
-  // cerr << setprecision(10);
-  // RowIterator({
-  //     t->GetColumnByName("htm_id"),
-  //     t->GetColumnByName("count"),
-  //     t->GetColumnByName("magpsf")
-  //   }).for_each([](RowIterator &rows) {
-  //     cerr << rows.cols_[0].value<UInt64Type>() << " "
-  //          << rows.cols_[1].value<DoubleType>() << " "
-  //          << rows.cols_[2].value<DoubleType>() << " "
-  //          << endl;
-  //  });
-  
-  std::shared_ptr<arrow::io::FileOutputStream> file
-      = arrow::io::FileOutputStream::Open("agg.arrow", /*append=*/true).ValueOrDie();
 
-  std::shared_ptr<arrow::ipc::RecordBatchWriter> writer = arrow::ipc::MakeFileWriter(file, t->schema()).ValueOrDie();
-
-  OK_OR_DIE(writer->WriteTable(*t));
-  OK_OR_DIE(writer->Close());
+  write_arrow(t, "agg.arrow");
   
   return 0;
 }

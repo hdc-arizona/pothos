@@ -119,3 +119,20 @@ map_rows(RowIterator &rows, T closure)
   std::cerr << "Done!" << std::endl;
   return std::shared_ptr<arrow::ChunkedArray>(new arrow::ChunkedArray({ builder.Finish().ValueOrDie() }));
 }
+
+// same as above, but construct the RowIterator internally
+// given a table and some columns
+template <typename ArrowType, typename T>
+std::shared_ptr<arrow::ChunkedArray>
+map_rows(std::shared_ptr<arrow::Table> t,
+         const std::vector<std::string> &col_names,
+         T closure)
+{
+  std::vector<std::shared_ptr<arrow::ChunkedArray>> cols;
+  for (auto &name: col_names) {
+    cols.push_back(t->GetColumnByName(name));
+  }
+  RowIterator rows(cols);
+  return map_rows<ArrowType, T>(rows, closure);
+}
+
