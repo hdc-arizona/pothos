@@ -19,6 +19,7 @@
 
 #include "htm.h"
 #include <iomanip>
+
 /******************************************************************************/
 
 using namespace std;
@@ -54,7 +55,7 @@ int main(int argc, char **argv)
           OK_OR_DIE(x.Append(c.x));
           OK_OR_DIE(y.Append(c.y));
           OK_OR_DIE(z.Append(c.z));
-          uint64_t result = htm_id(c, 10);
+          uint64_t result = htm_id(c, 5);
           return result;
         });
 
