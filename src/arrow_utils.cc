@@ -313,3 +313,19 @@ make_gaussian_stats_table(shared_ptr<Table> t)
 {
   return make_gaussian_stats_table(t->columns());
 }
+
+std::shared_ptr<Table> arrow_select_columns(
+    shared_ptr<Table> t,
+    const std::vector<string> &names)
+{
+  std::vector<int> indices;
+  auto schema = t->schema();
+  for (const auto& name: names) {
+    int ix = schema->GetFieldIndex(name);
+    if (ix == -1) {
+      return nullptr;
+    }
+    indices.push_back(ix);
+  }
+  return t->SelectColumns(indices).ValueOrDie();
+}

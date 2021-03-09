@@ -15,6 +15,10 @@
 
 /******************************************************************************/
 
+std::shared_ptr<arrow::Table> arrow_select_columns(
+    std::shared_ptr<arrow::Table> t,
+    const std::vector<std::string>& names);
+
 std::shared_ptr<arrow::Table> make_table(
     const std::unordered_map<std::string, std::shared_ptr<arrow::ChunkedArray>> &columns);
 
@@ -37,6 +41,9 @@ void write_arrow(
     std::shared_ptr<arrow::Table> table,
     const std::string &path,
     int64_t max_chunk_size = -1);
+
+template <typename BuilderT>
+std::shared_ptr<arrow::ChunkedArray> from_builder(BuilderT &b);
 
 /******************************************************************************/
 /// cbind: combines columns from two different tables.

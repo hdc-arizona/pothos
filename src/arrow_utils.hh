@@ -136,3 +136,12 @@ map_rows(std::shared_ptr<arrow::Table> t,
   return map_rows<ArrowType, T>(rows, closure);
 }
 
+
+/******************************************************************************/
+
+template <typename BuilderT>
+std::shared_ptr<arrow::ChunkedArray> from_builder(BuilderT &b)
+{
+  return std::shared_ptr<arrow::ChunkedArray>(
+      new arrow::ChunkedArray( { b.Finish().ValueOrDie() } ));
+}
